@@ -122,10 +122,10 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* Sidebar premium styling (Light Gray theme for Logo Legibility) */
+    /* Sidebar premium styling (Pantone Black 7 C Dark theme) */
     [data-testid="stSidebar"] {
-        background-color: #F8F9FA !important;
-        border-right: 1px solid #E2E8F0 !important;
+        background-color: #111111 !important;
+        border-right: 1px solid #2D2D2D !important;
     }
     
     [data-testid="stSidebar"] .stMarkdown,
@@ -138,7 +138,12 @@ st.markdown("""
     [data-testid="stSidebar"] h4,
     [data-testid="stSidebar"] h5,
     [data-testid="stSidebar"] h6 {
-        color: #111111 !important;
+        color: #FFFFFF !important;
+    }
+    
+    /* Invert logo color to negative for dark sidebar */
+    [data-testid="stSidebar"] img {
+        filter: brightness(0) invert(1) !important;
     }
     
     /* Force white text on sidebar buttons to override general sidebar text rules */
@@ -149,8 +154,12 @@ st.markdown("""
     
     /* Active navigation item highlighting: Red Pill style with White Text and White dot */
     [data-testid="stSidebar"] div[role="radiogroup"] label span {
-        color: #111111 !important;
+        color: #D2D3D5 !important;
         font-weight: 500 !important;
+    }
+    
+    [data-testid="stSidebar"] div[role="radiogroup"] label:hover span {
+        color: #FFFFFF !important;
     }
     
     [data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]:checked) {
@@ -313,10 +322,19 @@ else:
     if os.path.exists(LOGO_PATH):
         st.sidebar.image(LOGO_PATH, use_container_width=True)
     else:
-        st.sidebar.markdown("<h2 style='color:#EC2024; margin:0; font-family:\"Montserrat\";'>SIGRAMA</h2>", unsafe_allow_html=True)
+        st.sidebar.markdown("<h2 style='color:#FFFFFF; margin:0; font-family:\"Montserrat\";'>SIGRAMA</h2>", unsafe_allow_html=True)
         
-    st.sidebar.markdown(f"### Bienvenido, **{st.session_state['nombre_completo']}**")
-    st.sidebar.markdown(f"Rol: `{st.session_state['role']}`")
+    # Styled Profile Section
+    st.sidebar.markdown(f"""
+    <div style="background-color: #1E1E1E; border: 1px solid #2D2D2D; padding: 0.8rem; border-radius: 6px; margin: 1rem 0;">
+        <div style="font-family: 'Questrial', sans-serif; font-size: 0.85rem; color: #D2D3D5; margin-bottom: 0.2rem;">
+            👤 <span style="font-weight: bold; color: #FFFFFF;">Usuario:</span> {st.session_state['nombre_completo']}
+        </div>
+        <div style="font-family: 'Questrial', sans-serif; font-size: 0.85rem; color: #D2D3D5;">
+            🔒 <span style="font-weight: bold; color: #FFFFFF;">Rol:</span> {st.session_state['role']}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Navigation Menu
     st.sidebar.markdown("---")
@@ -356,17 +374,17 @@ else:
 
     # Sidebar Footer (Slogan & Contact details)
     st.sidebar.markdown("""
-    <div style="text-align: center; padding-top: 1.5rem; border-top: 1px solid #E2E8F0; margin-top: 1rem;">
-        <p style="font-family: 'Questrial', sans-serif; font-size: 0.8rem; color: #666666; margin: 0;">
+    <div style="text-align: center; padding-top: 1.5rem; border-top: 1px solid #2D2D2D; margin-top: 1rem;">
+        <p style="font-family: 'Questrial', sans-serif; font-size: 0.8rem; color: #D2D3D5; margin: 0;">
             Industria Sigrama S.A. de C.V.
         </p>
         <p style="font-family: 'Montserrat', sans-serif; font-style: italic; font-weight: bold; color: #EC2024; font-size: 0.9rem; margin: 0.4rem 0 0.8rem 0;">
             Ingeniería que da resultados!!
         </p>
         <hr style="border: 0; border-top: 2px solid #EC2024; width: 30px; margin: 0.5rem auto;">
-        <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📧 <a href="mailto:sigrama@sigrama.com.mx" style="color: #EC2024; text-decoration: none;">sigrama@sigrama.com.mx</a></p>
-        <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">🌐 <a href="https://www.sigrama.com.mx" target="_blank" style="color: #EC2024; text-decoration: none;">www.sigrama.com.mx</a></p>
-        <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📞 871 722 3132</p>
+        <p style="font-size: 0.75rem; color: #D2D3D5; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📧 <a href="mailto:sigrama@sigrama.com.mx" style="color: #EC2024; text-decoration: none;">sigrama@sigrama.com.mx</a></p>
+        <p style="font-size: 0.75rem; color: #D2D3D5; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">🌐 <a href="https://www.sigrama.com.mx" target="_blank" style="color: #EC2024; text-decoration: none;">www.sigrama.com.mx</a></p>
+        <p style="font-size: 0.75rem; color: #D2D3D5; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📞 871 722 3132</p>
     </div>
     """, unsafe_allow_html=True)
         

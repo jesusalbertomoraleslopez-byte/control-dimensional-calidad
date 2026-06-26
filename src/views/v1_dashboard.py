@@ -6,8 +6,19 @@ import plotly.graph_objects as go
 from src.database import get_connection
 
 def show_dashboard():
-    st.title("1. Dashboard Principal - Estado Analítico de Control Dimensional")
-    st.subheader("Indicadores Clave de Desempeño (KPIs) y Capacidad de Proceso")
+    st.title("Dashboard Principal")
+    st.subheader("Estado Analítico de Control Dimensional y Capacidad de Proceso (SPC)")
+    
+    # Slogan of Transformation (Page 29 styling)
+    st.markdown("""
+        <div style="text-align: center; margin: 1.5rem 0;">
+            <hr style="border: 0; border-top: 2px solid #EC2024; width: 100%; margin: 0.5rem 0;">
+            <h3 style="color: #EC2024 !important; font-family: 'Montserrat', sans-serif; font-weight: 800; letter-spacing: 2px; margin: 0.5rem 0; font-size: 1.25rem;">
+                SOLUCIONES QUE TRANSFORMAN TU EMPRESA
+            </h3>
+            <hr style="border: 0; border-top: 2px solid #EC2024; width: 100%; margin: 0.5rem 0;">
+        </div>
+    """, unsafe_allow_html=True)
     
     # Connect to DB and fetch summary info
     conn = get_connection()
