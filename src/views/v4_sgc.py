@@ -1,213 +1,102 @@
 import streamlit as st
-import pandas as pd
 import os
-from src.database import get_connection
-from src.pdf_generator import NumberedCanvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import io
-
-def generate_procedimiento_pdf(codigo, nombre, version) -> bytes:
-    """
-    Genera un PDF genérico para un procedimiento oficial del SGC.
-    """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=54,
-        rightMargin=54,
-        topMargin=72,
-        bottomMargin=72
-    )
-    
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle(
-        'SgcTitle',
-        parent=styles['Heading1'],
-        fontName='Helvetica-Bold',
-        fontSize=16,
-        leading=20,
-        textColor=colors.HexColor("#EC2024"),
-        spaceAfter=15,
-        alignment=1 # Centered
-    )
-    
-    body_style = ParagraphStyle(
-        'SgcBody',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        leading=14,
-        textColor=colors.HexColor("#1e293b"),
-        spaceAfter=10
-    )
-    
-    bold_style = ParagraphStyle(
-        'SgcBold',
-        parent=body_style,
-        fontName='Helvetica-Bold'
-    )
-    
-    story = []
-    
-    story.append(Paragraph("SISTEMA DE GESTIÓN DE CALIDAD - SIGRAMA", title_style))
-    story.append(Paragraph(f"PROCEDIMIENTO OFICIAL: {nombre}", title_style))
-    story.append(Spacer(1, 10))
-    
-    info_data = [
-        [Paragraph("Código:", bold_style), Paragraph(codigo, body_style),
-         Paragraph("Versión / Revisión:", bold_style), Paragraph(version, body_style)],
-        [Paragraph("Fecha Emisión:", bold_style), Paragraph("19/06/2026", body_style),
-         Paragraph("Clasificación:", bold_style), Paragraph("CONFIDENCIAL", body_style)]
-    ]
-    t_info = Table(info_data, colWidths=[90, 160, 110, 140])
-    t_info.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
-        ('PADDING', (0,0), (-1,-1), 5),
-    ]))
-    story.append(t_info)
-    story.append(Spacer(1, 20))
-    
-    story.append(Paragraph("1. PROPÓSITO", ParagraphStyle('H2', parent=styles['Heading2'], textColor=colors.HexColor("#EC2024"))))
-    story.append(Paragraph(f"Establecer los lineamientos y criterios obligatorios para el aseguramiento de calidad dimensional del componente '{nombre}' mediante control estadístico y calibración en piso.", body_style))
-    story.append(Spacer(1, 10))
-    
-    story.append(Paragraph("2. ALCANCE", ParagraphStyle('H2', parent=styles['Heading2'], textColor=colors.HexColor("#EC2024"))))
-    story.append(Paragraph("Aplica para todo el personal de Ingeniería, Operadores de Corte Láser, Operadores de Dobladora CNC y Auditores de Calidad involucrados en el proceso productivo.", body_style))
-    story.append(Spacer(1, 10))
-    
-    story.append(Paragraph("3. RESPONSABILIDADES", ParagraphStyle('H2', parent=styles['Heading2'], textColor=colors.HexColor("#EC2024"))))
-    story.append(Paragraph("• <b>Ingeniería de Diseño:</b> Alta de parámetros, SKU, y carga de archivos nativos de planos.<br/>"
-                           "• <b>Operador de Planta:</b> Captura en tiempo real de mediciones físicas en subgrupos n=3.<br/>"
-                           "• <b>Administrador de Calidad:</b> Liberación de primera pieza y auditorías de proceso.", body_style))
-    
-    doc.build(story, canvasmaker=NumberedCanvas)
-    pdf_bytes = buffer.getvalue()
-    buffer.close()
-    return pdf_bytes
 
 def show_sgc():
-    st.title("4. Sistema de Gestión de Calidad (SGC)")
-    st.subheader("Control Documental de Procedimientos Oficiales de SIGRAMA")
-    
-    conn = get_connection()
-    cursor = conn.cursor()
+    st.title("Sistema de Gestión de Calidad (SGC)")
+    st.subheader("Boceto de Procedimiento y Control Documental")
     
     st.markdown("""
-        Esta sección permite administrar y empatar los procedimientos oficiales del **Sistema de Gestión de Calidad (SGC)** de SIGRAMA.
-        Las piezas capturadas en piso deben cumplir rigurosamente con los códigos de auditoría aquí cargados.
+        > [!NOTE]
+        > Por motivos de seguridad y confidencialidad de la empresa, **los procedimientos oficiales no se despliegan en pantalla** en ninguna sección de la aplicación para evitar copias no autorizadas.
+        
+        Puedes descargar el archivo oficial **`Procedimiento.md`** a continuación. Este archivo sirve como boceto del procedimiento siempre actualizado con todos los cambios recientes hechos al sistema de control dimensional de SIGRAMA.
     """)
     
-    # Check current SGC procedures in database
-    df_sgc = pd.read_sql_query("SELECT * FROM procedimientos_sgc", conn)
+    # Slogan of Transformation
+    st.markdown("""
+        <div style="background-color: #111111; border-left: 6px solid #EC2024; padding: 1.5rem; border-radius: 8px; margin: 2rem 0; text-align: center;">
+            <p style="color: #FFFFFF; font-weight: 800; font-size: 1.2rem; letter-spacing: 1px; margin: 0; font-family: 'Montserrat', sans-serif;">
+                SOLUCIONES QUE TRANSFORMAN TU EMPRESA
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Carga Inicial de documentos del SGC
-    st.markdown("#### 📥 Cargar Procedimiento del SGC al Sistema")
-    with st.form("form_sgc_upload"):
-        col1, col2 = st.columns(2)
-        with col1:
-            sgc_code = st.text_input("Código del Documento SGC (Ej: SGC-PRC-01)")
-            sgc_name = st.text_input("Nombre Oficial / Descripción (Ej: Procedimiento de Control Dimensional)")
-        with col2:
-            sgc_version = st.text_input("Versión Oficial (Ej: Rev. 2)")
-            sgc_file = st.file_uploader("Subir Archivo de Procedimiento (PDF)", type=["pdf"])
-            
-        btn_upload_sgc = st.form_submit_button("Subir e Integrar Procedimiento", key="btn_sgc_upload_red")
-        
-        if btn_upload_sgc:
-            if not sgc_code or not sgc_name or not sgc_version or not sgc_file:
-                st.error("Error: Todos los campos del formulario y el archivo PDF son obligatorios.")
-            else:
-                # Save physical file
-                sgc_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "SGC_Documents")
-                os.makedirs(sgc_dir, exist_ok=True)
-                dest_path = os.path.join(sgc_dir, f"{sgc_code}.pdf")
-                with open(dest_path, "wb") as f:
-                    f.write(sgc_file.read())
-                    
-                # Save to database
-                try:
-                    cursor.execute(
-                        "INSERT INTO procedimientos_sgc (codigo, nombre, version, ruta_archivo) VALUES (?, ?, ?, ?)",
-                        (sgc_code, sgc_name, sgc_version, dest_path)
-                    )
-                    conn.commit()
-                    st.success(f"✅ Documento '{sgc_code}' cargado con éxito en el Sistema de Gestión de Calidad.")
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"Error al registrar en base de datos: {str(ex)}")
-                    
-    st.markdown("---")
-    st.markdown("#### 📋 Procedimientos Oficiales Activos")
+    # Markdown content for Procedimiento.md
+    procedimiento_content = """# PROCEDIMIENTO GENERAL DE CONTROL DE CALIDAD - SIGRAMA
+
+**Código:** [En revisión por SGC]  
+**Versión:** 4.0  
+**Fecha de Actualización:** 26/06/2026  
+**Estatus:** Activo - Boceto de Procedimiento Integrado al Sistema  
+
+---
+
+## 1. OBJETIVO
+Establecer los lineamientos, metodologías y responsabilidades obligatorias para realizar el control de calidad dimensional en los componentes y piezas de chapa metálica fabricados por Industria SIGRAMA, utilizando la aplicación web centralizada de control dimensional y herramientas estadísticas (SPC).
+
+## 2. ALCANCE
+Aplica a todos los procesos de:
+- **Ingeniería de Diseño:** Para el registro de piezas, carga de DXF, STEP, SolidWorks y tablas de tolerancias.
+- **Producción (Corte Láser y Dobladora CNC):** Para la captura en piso de las muestras físicas (n=3).
+- **Control de Calidad:** Para la liberación de primeras piezas, análisis estadístico de habilidad de proceso (Cp/Cpk), y consolidación de remisiones.
+
+## 3. PROCEDIMIENTO Y FLUJO DE TRABAJO
+
+### 3.1. Registro del Diseño
+El Diseñador debe registrar el componente en el sistema generando el SKU concatenado oficial. Es obligatorio cargar:
+1. Dibujo original del cliente (.PDF)
+2. Desplegado (.DXF)
+3. Plano de control (.PDF)
+4. Plano nativo de diseño 3D (.SLDDRW)
+5. Dibujo nativo 2D (.SLDPRT)
+6. Excel de especificaciones de tolerancias (.XLSX)
+7. Modelo 3D (.STEP) para el visualizador interactivo.
+
+### 3.2. Liberación de Primera Pieza
+Antes de arrancar la producción de un lote, el Auditor de Calidad debe inspeccionar la primera pieza física contra el plano de control, subir la evidencia escaneada y marcar la pieza como **LIBERADA** en el sistema.
+
+### 3.3. Captura de Mediciones en Piso (Muestreo n=3)
+El Operador en planta debe realizar la medición de 3 muestras físicas por cada lote y capturar las dimensiones de largo, ancho y cotas de doblez (A-J) en la aplicación local (`localhost:8501`).
+
+### 3.4. Análisis Estadístico y Cp/Cpk
+La aplicación calculará automáticamente los índices de capacidad de proceso (Cp y Cpk). El estándar de aceptación para SIGRAMA es:
+- **Cpk >= 1.33:** Proceso capaz. El lote se aprueba para embarque.
+- **Cpk < 1.33:** Proceso no capaz. Se debe detener la producción para ajustar la maquinaria (Láser o Dobladora) y recalibrar.
+
+### 3.5. Consolidación de Remisiones
+El Administrador generará el reporte consolidado de remisión diaria en PDF que avala la calidad dimensional del embarque frente al cliente final.
+
+---
+
+## 4. REGISTRO DE CAMBIOS Y ACTUALIZACIONES DEL SISTEMA
+- **Junio 2026:**
+  - Implementación de visualización 3D interactiva WebGL con centrado automático (zoom-to-fit) adaptativo para pantalla completa.
+  - Integración del botón de ajuste rápido "Zoom All" para re-encuadrar modelos sin perder la rotación manual.
+  - Restructuración jerárquica del menú principal según catálogo de cuentas de la empresa.
+  - Inyección de imagen corporativa oficial con tipografías *Questrial* y *Montserrat* y colores institucionales (Rojo #EC2024 y Negro #111111).
+  - Implementación del módulo de Importación Masiva mediante carga de archivos comprimidos (.ZIP) en servidores Streamlit Cloud.
+  - Restricción de visibilidad y descargas nativas en Word/PDF de control documental para SGC.
+
+---
+_Ingeniería que da resultados!!_
+"""
+
+    st.download_button(
+        label="📥 Descargar Boceto de Procedimiento (Procedimiento.md)",
+        data=procedimiento_content,
+        file_name="Procedimiento.md",
+        mime="text/markdown",
+        key="btn_download_procedimiento_md"
+    )
     
-    if len(df_sgc) == 0:
-        st.info("💡 No hay procedimientos cargados por el usuario. Mostrando los documentos institucionales base de SIGRAMA:")
-        
-        # Default mock table showing default standard documents
-        default_sgc = [
-            {"Código": "SGC-PRC-01", "Nombre/Descripción": "Procedimiento General de Control Estadístico de Proceso", "Versión": "Rev. 1", "Estatus": "Activo"},
-            {"Código": "SGC-CAL-03", "Nombre/Descripción": "Instrucción de Trabajo: Calibración y Calibres en Planta", "Versión": "Rev. 3", "Estatus": "Activo"},
-            {"Código": "SGC-LIB-05", "Nombre/Descripción": "Criterio de Aceptación y Rechazo de Primeras Piezas", "Versión": "Rev. 0", "Estatus": "Activo"}
-        ]
-        st.table(pd.DataFrame(default_sgc))
-        
-        # Download buttons for mock procedures
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.markdown("**1. Procedimiento General (SGC-PRC-01)**")
-            pdf1 = generate_procedimiento_pdf("SGC-PRC-01", "Procedimiento General de Control Estadístico de Proceso", "Rev. 1")
-            st.download_button(
-                label="📥 Descargar SGC-PRC-01 (PDF)",
-                data=pdf1,
-                file_name="SGC-PRC-01_Control_Estadistico.pdf",
-                mime="application/pdf",
-                key="btn_download_sgc_prc_01"
-            )
-        with col_m2:
-            st.markdown("**2. Instrucción de Calibración (SGC-CAL-03)**")
-            pdf2 = generate_procedimiento_pdf("SGC-CAL-03", "Instrucción de Trabajo: Calibración y Calibres en Planta", "Rev. 3")
-            st.download_button(
-                label="📥 Descargar SGC-CAL-03 (PDF)",
-                data=pdf2,
-                file_name="SGC-CAL-03_Instruccion_Calibracion.pdf",
-                mime="application/pdf",
-                key="btn_download_sgc_cal_03"
-            )
-    else:
-        # Display registered SGC documents
-        st.dataframe(df_sgc[["codigo", "nombre", "version", "fecha_carga"]], use_container_width=True)
-        
-        st.markdown("##### 📂 Descargar Procedimiento Registrado:")
-        selected_sgc_code = st.selectbox("Seleccione el documento para descargar:", df_sgc["codigo"].tolist())
-        
-        if selected_sgc_code:
-            row = df_sgc[df_sgc["codigo"] == selected_sgc_code].iloc[0]
-            file_path = row["ruta_archivo"]
-            
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    file_bytes = f.read()
-                st.download_button(
-                    label=f"📥 Descargar {selected_sgc_code} (PDF)",
-                    data=file_bytes,
-                    file_name=f"{selected_sgc_code}_Procedimiento.pdf",
-                    mime="application/pdf",
-                    key=f"btn_download_registered_sgc_{selected_sgc_code}"
-                )
-            else:
-                st.error("El archivo físico no se encuentra en el servidor. Descargando copia de contingencia...")
-                backup_pdf = generate_procedimiento_pdf(row["codigo"], row["nombre"], row["version"])
-                st.download_button(
-                    label=f"📥 Descargar Contingencia {selected_sgc_code} (PDF)",
-                    data=backup_pdf,
-                    file_name=f"{selected_sgc_code}_Contingencia.pdf",
-                    mime="application/pdf",
-                    key=f"btn_download_registered_sgc_cont_{selected_sgc_code}"
-                )
-                
-    conn.close()
+    st.markdown("<br/><br/>", unsafe_allow_html=True)
+    
+    # Slogan of Results
+    st.markdown("""
+        <div style="text-align: right; margin-top: 2rem;">
+            <p style="font-family: 'Montserrat', sans-serif; font-style: italic; font-weight: bold; color: #EC2024; font-size: 1.1rem; margin: 0;">
+                Ingeniería que da resultados!!
+            </p>
+            <hr style="border: 0; border-top: 2px solid #EC2024; width: 100px; margin: 0.3rem 0 0 auto;">
+        </div>
+    """, unsafe_allow_html=True)
