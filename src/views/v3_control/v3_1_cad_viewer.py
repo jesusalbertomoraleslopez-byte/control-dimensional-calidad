@@ -18,7 +18,7 @@ def show_cad_viewer():
 
     # Direct DOM queries from the same-origin WebGL iframe are used for button click navigation.
 
-    # ── Scoped CSS: big blue piece selector, normal column filter dropdowns ──
+    # ── Scoped CSS: refined piece selector and column filter dropdowns ──
     st.markdown("""
     <style>
     /* ══ ALL SELECTBOXES: corporate black container ══════════════════════════ */
@@ -26,7 +26,7 @@ def show_cad_viewer():
         background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
         border: 2px solid #EC2024 !important;
         border-radius: 8px !important;
-        min-height: 72px !important;
+        min-height: 52px !important; /* Reducido de 72px */
     }
     /* Nuclear selector: force every child element to white text */
     div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
@@ -37,21 +37,21 @@ def show_cad_viewer():
         fill: #ffffff !important;
     }
 
-    /* ══ PIECE SELECTOR (not in column): extra large bold text ═══════════ */
+    /* ══ PIECE SELECTOR (not in column): large bold text ═══════════ */
     div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
-        font-size: 2.6rem !important;
-        font-weight: 900 !important;
-        text-shadow: 0 1px 4px rgba(0,0,0,0.5) !important;
+        font-size: 1.8rem !important; /* Reducido un 30% de 2.6rem */
+        font-weight: 800 !important;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
     }
 
-    /* ══ COLUMN FILTER DROPDOWNS: corporate red override ════════════════════ */
-    div[data-testid="column"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
-        background: #EC2024 !important;
+    /* ══ COLUMN FILTER DROPDOWNS: standard size override ════════════════════ */
+    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
+        background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
         border: 1px solid #EC2024 !important;
         min-height: 38px !important;
         border-radius: 6px !important;
     }
-    div[data-testid="column"] div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
+    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
         font-size: 0.92rem !important;
         font-weight: 700 !important;
         text-shadow: none !important;
