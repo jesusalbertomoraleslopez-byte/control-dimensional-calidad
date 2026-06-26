@@ -487,7 +487,22 @@ def show_design_loader():
             El sistema analizará las subcarpetas, validará los archivos requeridos y le permitirá seleccionar cuáles importar de forma masiva.
         """)
         
-        import_path = st.text_input("Ruta de la Carpeta (Ej: Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS)", value="")
+        import_method = st.radio(
+            "Método de Carga:",
+            ["Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)", "Cargar Archivo Comprimido (.ZIP)"],
+            horizontal=True,
+            key="import_method_radio"
+        )
+        
+        import_path = ""
+        zip_file = None
+        
+        if import_method == "Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)":
+            import_path = st.text_input("Ruta de la Carpeta (Ej: Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS)", value="")
+            if import_path:
+                import_path = import_path.strip().strip('"').strip("'")
+        else:
+            zip_file = st.file_uploader("Cargar Archivo ZIP con Estructura de Ingeniería", type=["zip"])
         
         # We use session state to persist scan results between data editor interactions
         if "bulk_scan_results" not in st.session_state:
@@ -499,16 +514,53 @@ def show_design_loader():
         with col_scan1:
             btn_scan = st.button("🔍 Escanear Carpeta", key="btn_import_scan_red")
             
+        run_scan = False
         if btn_scan:
-            if not import_path:
-                st.error("Error: Debe ingresar una ruta de carpeta válida.")
-            elif not os.path.exists(import_path):
-                st.error(f"❌ La ruta especificada no existe o no es accesible: '{import_path}'")
+            if import_method == "Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)":
+                if not import_path:
+                    st.error("Error: Debe ingresar una ruta de carpeta válida.")
+                elif not os.path.exists(import_path):
+                    st.error(f"❌ La ruta especificada no existe o no es accesible: '{import_path}'")
+                else:
+                    st.session_state["bulk_scan_results"] = None
+                    st.session_state["last_scanned_path"] = import_path
+                    run_scan = True
             else:
-                st.session_state["bulk_scan_results"] = None
-                st.session_state["last_scanned_path"] = import_path
-                
-                with st.spinner("Escaneando subcarpetas de Ingeniería..."):
+                if zip_file is None:
+                    st.error("Error: Debe cargar un archivo ZIP válido.")
+                else:
+                    import zipfile
+                    import shutil
+                    
+                    temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "temp_bulk_import")
+                    if os.path.exists(temp_dir):
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                    os.makedirs(temp_dir, exist_ok=True)
+                    
+                    try:
+                        with zipfile.ZipFile(zip_file) as z:
+                            z.extractall(temp_dir)
+                            
+                        # Find the folder containing the ING folders
+                        scan_root = temp_dir
+                        import re
+                        for _ in range(3):
+                            contents = [c for c in os.listdir(scan_root) if os.path.isdir(os.path.join(scan_root, c)) and not c.startswith(".")]
+                            if len(contents) == 1 and not re.match(r"ING\d+", contents[0]):
+                                scan_root = os.path.join(scan_root, contents[0])
+                            else:
+                                break
+                                
+                        import_path = scan_root
+                        st.session_state["bulk_scan_results"] = None
+                        st.session_state["last_scanned_path"] = import_path
+                        run_scan = True
+                    except Exception as e:
+                        st.error(f"❌ Error al descomprimir el archivo ZIP: {str(e)}")
+                        run_scan = False
+                        
+        if run_scan:
+            with st.spinner("Escaneando subcarpetas de Ingeniería..."):
                     import re
                     
                     def parse_folder_name(folder_name):
@@ -863,6 +915,11 @@ def show_design_loader():
                         
                     st.success(f"🎉 Importación finalizada con éxito. Importados: {import_count}, Errores/Ignorados: {errors}")
                     st.session_state["bulk_scan_results"] = None # Clear scan results to force fresh scan
+                    
+                    # Clean up temporary directory if it exists
+                    temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "temp_bulk_import")
+                    if os.path.exists(temp_dir):
+                        shutil.rmtree(temp_dir, ignore_errors=True)
                     
                     with st.expander("📝 Registro Completo de Eventos (Log)"):
                         st.text("\n".join(logs_output))
