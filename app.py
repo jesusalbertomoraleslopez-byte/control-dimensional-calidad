@@ -141,11 +141,6 @@ st.markdown("""
         color: #FFFFFF !important;
     }
     
-    /* Invert logo color to negative for dark sidebar */
-    [data-testid="stSidebar"] img {
-        filter: brightness(0) invert(1) !important;
-    }
-    
     /* Force white text on sidebar buttons to override general sidebar text rules */
     [data-testid="stSidebar"] button,
     [data-testid="stSidebar"] button * {
@@ -318,7 +313,7 @@ else:
     show_banner()
     
     # Sidebar Logo and Header
-    LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo_sigrama.png")
+    LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo_sigrama_negative.png")
     if os.path.exists(LOGO_PATH):
         st.sidebar.image(LOGO_PATH, use_container_width=True)
     else:
