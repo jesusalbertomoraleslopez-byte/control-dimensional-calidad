@@ -26,70 +26,117 @@ def generate_glossary_docx(codigo, nombre, asociado) -> bytes:
     section.right_margin = Inches(1)
     
     # Pantone Colors
-    # Rojo Corporativo: #EC2024 (Pantone 485 C) -> RGB 236, 32, 36
     c_red = RGBColor(236, 32, 36)
     c_black = RGBColor(17, 17, 17)
-    c_gray = RGBColor(100, 100, 100)
+    c_gray = RGBColor(128, 128, 128)
     
-    # Header Slogan
-    p_header = doc.add_paragraph()
-    r_header = p_header.add_run("SISTEMA DE GESTIÓN DE CALIDAD - SIGRAMA")
-    r_header.font.name = 'Arial'
-    r_header.font.size = Pt(9)
-    r_header.font.bold = True
-    r_header.font.color.rgb = c_gray
-    p_header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # ── Header ──
+    header = section.header
+    p_hdr = header.paragraphs[0]
+    p_hdr.text = ""
+    r_hdr = p_hdr.add_run("SIGRAMA - CONTROL DIMENSIONAL DE CALIDAD")
+    r_hdr.font.name = 'Arial'
+    r_hdr.font.size = Pt(8.5)
+    r_hdr.font.color.rgb = c_gray
+    p_hdr.alignment = WD_ALIGN_PARAGRAPH.LEFT
     
-    p_title = doc.add_paragraph()
-    r_title = p_title.add_run(f"PLANTILLA DE DOCUMENTO: {nombre}")
-    r_title.font.name = 'Arial'
-    r_title.font.size = Pt(14)
-    r_title.font.bold = True
-    r_title.font.color.rgb = c_red
-    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    pPr_hdr = p_hdr._p.get_or_add_pPr()
+    pBdr_hdr = parse_xml(r'<w:pBdr %s><w:bottom w:val="single" w:sz="4" w:space="4" w:color="D2D3D5"/></w:pBdr>' % nsdecls('w'))
+    pPr_hdr.append(pBdr_hdr)
     
-    doc.add_paragraph().add_run("").font.size = Pt(10) # spacer
+    # ── Footer ──
+    footer = section.footer
+    p_ftr = footer.paragraphs[0]
+    p_ftr.text = ""
+    r_ftr = p_ftr.add_run("CONFIDENCIAL - PROPIEDAD DE SIGRAMA S.A. DE C.V.\tPágina 1 de 1")
+    r_ftr.font.name = 'Arial'
+    r_ftr.font.size = Pt(8.5)
+    r_ftr.font.color.rgb = c_gray
     
-    # Info table
-    table = doc.add_table(rows=2, cols=2)
+    pPr_ftr = p_ftr._p.get_or_add_pPr()
+    pBdr_ftr = parse_xml(r'<w:pBdr %s><w:top w:val="single" w:sz="4" w:space="4" w:color="D2D3D5"/></w:pBdr>' % nsdecls('w'))
+    pPr_ftr.append(pBdr_ftr)
+    
+    # ── Page Titles ──
+    p_title1 = doc.add_paragraph()
+    r_title1 = p_title1.add_run("SISTEMA DE GESTIÓN DE CALIDAD - SIGRAMA")
+    r_title1.font.name = 'Arial'
+    r_title1.font.size = Pt(11)
+    r_title1.font.bold = True
+    r_title1.font.color.rgb = c_black
+    p_title1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title1.paragraph_format.space_after = Pt(2)
+    
+    p_title2 = doc.add_paragraph()
+    r_title2 = p_title2.add_run(f"PLANTILLA DE DOCUMENTO: {nombre}")
+    r_title2.font.name = 'Arial'
+    r_title2.font.size = Pt(13)
+    r_title2.font.bold = True
+    r_title2.font.color.rgb = c_red
+    p_title2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title2.paragraph_format.space_after = Pt(15)
+    
+    # ── Info Table (4 columns, matching PDF) ──
+    table = doc.add_table(rows=2, cols=4)
     table.alignment = docx.enum.table.WD_TABLE_ALIGNMENT.CENTER
     
-    # Style table cells (Borders & Padding)
+    # Column widths: 1.3, 1.8, 1.1, 2.3 inches
+    col_widths = [Inches(1.3), Inches(1.8), Inches(1.1), Inches(2.3)]
+    for row in table.rows:
+        for idx, width in enumerate(col_widths):
+            row.cells[idx].width = width
+            
+    # Set Cell Borders and Shading (Background Color)
     for row in table.rows:
         for cell in row.cells:
             tcPr = cell._tc.get_or_add_tcPr()
-            tcBorders = parse_xml(r'<w:tcBorders %s><w:top w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/><w:left w:val="none"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/><w:right w:val="none"/></w:tcBorders>' % nsdecls('w'))
+            # Grid borders
+            tcBorders = parse_xml(r'<w:tcBorders %s>'
+                                  r'<w:top w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/>'
+                                  r'<w:left w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/>'
+                                  r'<w:bottom w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/>'
+                                  r'<w:right w:val="single" w:sz="4" w:space="0" w:color="D2D3D5"/>'
+                                  r'</w:tcBorders>' % nsdecls('w'))
             tcPr.append(tcBorders)
+            # Background shading (#F8F9FA)
+            shading = parse_xml(r'<w:shd %s w:fill="F8F9FA"/>' % nsdecls('w'))
+            tcPr.append(shading)
             
-    # Row 0
-    cell_0_0 = table.cell(0, 0)
-    p_0_0 = cell_0_0.paragraphs[0]
-    p_0_0.add_run("Código Temporal: ").bold = True
-    p_0_0.add_run(codigo)
-    p_0_0.runs[0].font.name = 'Arial'
-    p_0_0.runs[1].font.name = 'Arial'
+            # Reduce default padding inside cells for tight look
+            tcMar = parse_xml(r'<w:tcMar %s>'
+                              r'<w:top w:w="80" w:type="dxa"/>'
+                              r'<w:bottom w:w="80" w:type="dxa"/>'
+                              r'<w:left w:w="120" w:type="dxa"/>'
+                              r'<w:right w:w="120" w:type="dxa"/>'
+                              r'</w:tcMar>' % nsdecls('w'))
+            tcPr.append(tcMar)
+            
+    # Helper function to populate cell
+    def fill_cell(cell, label, val):
+        p = cell.paragraphs[0]
+        p.paragraph_format.space_after = Pt(0)
+        p.paragraph_format.space_before = Pt(0)
+        if label:
+            r_lbl = p.add_run(label)
+            r_lbl.font.name = 'Arial'
+            r_lbl.font.size = Pt(9)
+            r_lbl.font.bold = True
+            r_lbl.font.color.rgb = c_black
+        if val:
+            r_val = p.add_run(val)
+            r_val.font.name = 'Arial'
+            r_val.font.size = Pt(9)
+            r_val.font.color.rgb = c_black
+            
+    fill_cell(table.cell(0, 0), "Código Temporal: ", None)
+    fill_cell(table.cell(0, 1), None, codigo)
+    fill_cell(table.cell(0, 2), "Asociado a: ", None)
+    fill_cell(table.cell(0, 3), None, asociado)
     
-    cell_0_1 = table.cell(0, 1)
-    p_0_1 = cell_0_1.paragraphs[0]
-    p_0_1.add_run("Asociado a: ").bold = True
-    p_0_1.add_run(asociado)
-    p_0_1.runs[0].font.name = 'Arial'
-    p_0_1.runs[1].font.name = 'Arial'
-    
-    # Row 1
-    cell_1_0 = table.cell(1, 0)
-    p_1_0 = cell_1_0.paragraphs[0]
-    p_1_0.add_run("Fecha de Generación: ").bold = True
-    p_1_0.add_run("26/06/2026")
-    p_1_0.runs[0].font.name = 'Arial'
-    p_1_0.runs[1].font.name = 'Arial'
-    
-    cell_1_1 = table.cell(1, 1)
-    p_1_1 = cell_1_1.paragraphs[0]
-    p_1_1.add_run("Estatus: ").bold = True
-    p_1_1.add_run("BORRADOR EN REVISIÓN (SGC)")
-    p_1_1.runs[0].font.name = 'Arial'
-    p_1_1.runs[1].font.name = 'Arial'
+    fill_cell(table.cell(1, 0), "Fecha de Generación: ", None)
+    fill_cell(table.cell(1, 1), None, "26/06/2026")
+    fill_cell(table.cell(1, 2), "Estatus: ", None)
+    fill_cell(table.cell(1, 3), None, "BORRADOR EN REVISIÓN (SGC)")
     
     doc.add_paragraph().add_run("").font.size = Pt(15) # spacer
     
@@ -132,6 +179,7 @@ def generate_glossary_docx(codigo, nombre, asociado) -> bytes:
     r_f.font.name = 'Arial'
     r_f.font.italic = True
     r_f.font.bold = True
+    r_f.underline = True
     r_f.font.color.rgb = c_red
     p_footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     
