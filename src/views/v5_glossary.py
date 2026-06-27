@@ -213,7 +213,7 @@ def generate_glossary_pdf(codigo, nombre, asociado) -> bytes:
     
     story.append(Paragraph("3. FIRMA INSTITUCIONAL Y CIERRE", ParagraphStyle('H2', parent=styles['Heading2'], textColor=colors.HexColor("#EC2024"))))
     story.append(Spacer(1, 5))
-    story.append(Paragraph("<u>Ingeniería que da resultados!!</u>", ParagraphStyle('FooterStyle', parent=body_style, fontName='Helvetica-Oblique-Bold', textColor=colors.HexColor("#EC2024"), alignment=2)))
+    story.append(Paragraph("<u>Ingeniería que da resultados!!</u>", ParagraphStyle('FooterStyle', parent=body_style, fontName='Helvetica-BoldOblique', textColor=colors.HexColor("#EC2024"), alignment=2)))
     
     doc.build(story, canvasmaker=NumberedCanvas)
     pdf_bytes = buffer.getvalue()
