@@ -36,11 +36,22 @@ def show_cad_viewer():
     div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
         fill: #ffffff !important;
     }
+    
+    /* Centrar verticalmente y eliminar paddings que recortan el texto */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"],
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] input {
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
+        display: flex !important;
+        align-items: center !important;
+    }
 
     /* ══ PIECE SELECTOR (not in column): large bold text ═══════════ */
-    div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
+    div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+    div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
         font-size: 1.8rem !important; /* Reducido un 30% de 2.6rem */
         font-weight: 800 !important;
+        line-height: 1.2 !important;
         text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
     }
 
@@ -51,12 +62,12 @@ def show_cad_viewer():
         min-height: 38px !important;
         border-radius: 6px !important;
     }
-    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
+    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
         font-size: 0.92rem !important;
         font-weight: 700 !important;
+        line-height: 1.2 !important;
         text-shadow: none !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
     }
     </style>
     """, unsafe_allow_html=True)
