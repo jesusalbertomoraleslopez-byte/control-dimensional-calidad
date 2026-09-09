@@ -5,6 +5,9 @@ import openpyxl
 from src.database import get_connection
 from src.pdf_generator import generate_first_piece_pdf
 from src.nesting_packager import generate_nesting_zip
+from src.audit_excel import generate_bulk_audit_excel
+from datetime import datetime
+import io
 
 def validate_excel_sheets(xlsx_path) -> bool:
     if not xlsx_path or not os.path.exists(xlsx_path):
@@ -713,7 +716,56 @@ def show_design_loader():
         if st.session_state["bulk_scan_results"] is not None:
             scanned_rows = st.session_state["bulk_scan_results"]
             
-            st.markdown("##### 📋 Listado de Diseños Detectados en Carpeta")
+            # ── Calculate Audit Metrics ──
+            total_detected = len(scanned_rows)
+            total_ready = sum(1 for r in scanned_rows if r.get("ready"))
+            total_pending = total_detected - total_ready
+            pct_ready = (total_ready / total_detected * 100.0) if total_detected > 0 else 0.0
+            
+            # Generate Excel Audit file with colors (openpyxl)
+            audit_source = st.session_state.get("last_scanned_path", import_path)
+            audit_excel_bytes = generate_bulk_audit_excel(scanned_rows, audit_source)
+            audit_filename = f"Auditoria_Ingenieria_Pendientes_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            
+            st.markdown("---")
+            st.markdown("##### 📋 Listado de Diseños Detectados en Carpeta y Auditoría")
+            
+            # ── KPI Cards ──
+            k_col1, k_col2, k_col3, k_col4 = st.columns(4)
+            with k_col1:
+                st.metric("Total Diseños Analizados", f"{total_detected}")
+            with k_col2:
+                st.metric("Diseños Completos", f"{total_ready}", delta="Listos para Importar", delta_color="normal")
+            with k_col3:
+                st.metric("Con Información Pendiente", f"{total_pending}", delta="Requiere Ingeniería", delta_color="inverse")
+            with k_col4:
+                st.metric("Índice de Integridad", f"{pct_ready:.1f}%")
+                
+            # ── Explanatory Banner & Top Download Button ──
+            top_dl_col1, top_dl_col2 = st.columns([2.5, 1])
+            with top_dl_col1:
+                st.markdown("""
+                <div style="background-color: #F8F9FA; border-left: 5px solid #EC2024; border: 1px solid #D2D3D5; border-radius: 6px; padding: 0.6rem 1rem;">
+                    <span style="font-family: 'Montserrat', sans-serif; font-weight: bold; color: #111111; font-size: 0.95rem;">
+                        📊 Reporte de Auditoría para Ingeniería (Excel a Color)
+                    </span>
+                    <p style="font-family: 'Questrial', sans-serif; font-size: 0.85rem; color: #64748b; margin: 0.2rem 0 0 0;">
+                        Descarga el informe completo con colores (🟢 Verde = Encontrado, 🔴 Rojo = Faltante) y la pestaña exclusiva <b>'Solo Pendientes'</b> para que el equipo de Ingeniería complete los archivos faltantes.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+            with top_dl_col2:
+                st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+                st.download_button(
+                    label="📥 Descargar Auditoría en Excel",
+                    data=audit_excel_bytes,
+                    file_name=audit_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Descargar archivo Excel con formato de colores de la auditoría actual",
+                    key="btn_dl_audit_excel_top"
+                )
+                
+            st.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
             st.markdown("Seleccione individualmente los registros válidos que desea registrar en la base de datos:")
             
             df_display = pd.DataFrame([
@@ -754,7 +806,21 @@ def show_design_loader():
             selected_indices = edited_df[edited_df["Seleccionar"] == True].index.tolist()
             st.info(f"📍 Diseños seleccionados para importar definitivamente: **{len(selected_indices)}** de **{len(scanned_rows)}**")
             
-            if st.button("🚀 Importar Selección Confirmada", key="btn_import_execute_red"):
+            # Action Buttons: Import and Download Excel
+            bot_act1, bot_act2 = st.columns([1, 1])
+            with bot_act1:
+                btn_import_clicked = st.button("🚀 Importar Selección Confirmada", key="btn_import_execute_red")
+            with bot_act2:
+                st.download_button(
+                    label="📊 Descargar Reporte de Auditoría (Excel a Color)",
+                    data=audit_excel_bytes,
+                    file_name=audit_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Descargar archivo Excel con formato de colores de la auditoría actual",
+                    key="btn_dl_audit_excel_bottom"
+                )
+                
+            if btn_import_clicked:
                 if not selected_indices:
                     st.error("Error: No ha seleccionado ningún registro viable para importar.")
                 else:
