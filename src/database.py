@@ -219,6 +219,46 @@ def initialize_database():
         ]
         cursor.executemany("INSERT INTO glosario_documentos (codigo_documento, nombre_oficial, asociado_a, ruta_plantilla_muestra) VALUES (?, ?, ?, ?)", glossary_items)
         
+    # Auto-sync existing parts from src/Proyectos directory into piezas table (ensures cloud deployment has all parts)
+    proyectos_dir = os.path.join(os.path.dirname(__file__), "Proyectos")
+    if os.path.exists(proyectos_dir):
+        import re
+        pattern = r"(?P<part_no>.+?)-\((?P<material>[a-zA-Z0-9]+)\s+(?P<finish>.+?)\)\s*-\s*K(?P<k_factor>\d+)\s*-\s*(?P<version>V\d+)-(?P<revision>R\d+)"
+        for root, dirs, files in os.walk(proyectos_dir):
+            step_files = [f for f in files if f.lower().endswith(('.step', '.stp'))]
+            if step_files:
+                sku_candidate = os.path.splitext(step_files[0])[0]
+                m = re.search(pattern, sku_candidate)
+                if m:
+                    p = m.groupdict()
+                    full_sku = f"{p['part_no']}-({p['material']} {p['finish']}) - K{p['k_factor']} - {p['version']}-{p['revision']}"
+                    
+                    dxf = next((os.path.join(root, f) for f in files if f.lower().endswith('.dxf')), None)
+                    step = os.path.join(root, step_files[0])
+                    xlsx = next((os.path.join(root, f) for f in files if f.lower().endswith('.xlsx')), None)
+                    slddrw = next((os.path.join(root, f) for f in files if f.lower().endswith('.slddrw')), None)
+                    sldprt = next((os.path.join(root, f) for f in files if f.lower().endswith('.sldprt')), None)
+                    ctrl_pdf = next((os.path.join(root, f) for f in files if f.lower().endswith('.pdf') and not f.lower().startswith('backup') and 'original' not in f.lower()), None)
+                    orig_pdf = next((os.path.join(root, f) for f in files if 'original' in f.lower() or f.lower().endswith('.pdf')), None)
+                    
+                    esp_match = re.search(r"Espesor_([0-9.]+)", root)
+                    esp = float(esp_match.group(1)) if esp_match else 0.060
+                    
+                    cursor.execute("INSERT OR IGNORE INTO materias_primas (material, espesor_nominal) VALUES (?, ?)", (p['material'], esp))
+                    
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO piezas (
+                        numero_pieza, material, acabado_estandar, factor_k, version, revision, nombre_sku,
+                        espesor_materia_prima, ancho_materia_prima, largo_materia_prima, ruta_almacenamiento,
+                        archivo_dibujo_original, archivo_dxf, archivo_plano_control, archivo_plano_nativo_3d,
+                        archivo_dibujo_nativo_2d, archivo_excel_resumen, archivo_step, usuario_registro
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        p['part_no'], p['material'], p['finish'], int(p['k_factor']), p['version'], p['revision'], full_sku,
+                        esp, 0.0, 0.0, root,
+                        orig_pdf, dxf, ctrl_pdf, slddrw, sldprt, xlsx, step, 'Sistema (Auto-Sync)'
+                    ))
+        
     conn.commit()
     conn.close()
 
