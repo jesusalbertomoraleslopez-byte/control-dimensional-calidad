@@ -492,7 +492,7 @@ def show_design_loader():
         
         import_method = st.radio(
             "Método de Carga:",
-            ["Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)", "Cargar Archivo Comprimido (.ZIP)"],
+            ["Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)", "Cargar Archivo Comprimido (.ZIP / .RAR)"],
             horizontal=True,
             key="import_method_radio"
         )
@@ -506,7 +506,7 @@ def show_design_loader():
         
         if import_method == "Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)":
             if not os.path.exists("Z:\\") and os.name != "nt":
-                st.info("☁️ **Estás navegando en la versión en la Nube (Streamlit Cloud):** Los servidores remotos no pueden acceder directamente a la unidad física `Z:\\` de tu red local. Para importar nuevos diseños desde la nube, utiliza la opción **'Cargar Archivo Comprimido (.ZIP)'** o ejecuta la aplicación desde tu computadora local / Concentradora.")
+                st.info("☁️ **Estás navegando en la versión en la Nube (Streamlit Cloud):** Los servidores remotos no pueden acceder directamente a la unidad física `Z:\\` de tu red local. Para importar nuevos diseños desde la nube, utiliza la opción **'Cargar Archivo Comprimido (.ZIP / .RAR)'** o ejecuta la aplicación desde tu computadora local / Concentradora.")
 
             col_in, col_browse, col_def = st.columns([3.2, 1.2, 1.2])
             with col_in:
@@ -543,7 +543,7 @@ def show_design_loader():
                     st.session_state["bulk_import_path"] = default_official_path
                     st.rerun()
         else:
-            zip_file = st.file_uploader("Cargar Archivo ZIP con Estructura de Ingeniería", type=["zip"])
+            zip_file = st.file_uploader("Cargar Archivo Comprimido (.ZIP o .RAR) con Estructura de Ingeniería", type=["zip", "rar"])
         
         # We use session state to persist scan results between data editor interactions
         if "bulk_scan_results" not in st.session_state:
@@ -568,7 +568,7 @@ def show_design_loader():
                     run_scan = True
             else:
                 if zip_file is None:
-                    st.error("Error: Debe cargar un archivo ZIP válido.")
+                    st.error("Error: Debe cargar un archivo ZIP o RAR válido.")
                 else:
                     import zipfile
                     import shutil
@@ -579,8 +579,19 @@ def show_design_loader():
                     os.makedirs(temp_dir, exist_ok=True)
                     
                     try:
-                        with zipfile.ZipFile(zip_file) as z:
-                            z.extractall(temp_dir)
+                        file_name_lower = getattr(zip_file, "name", "").lower()
+                        if file_name_lower.endswith(".rar"):
+                            try:
+                                import rarfile
+                                if os.path.exists(r"C:\Program Files\WinRAR\UnRAR.exe"):
+                                    rarfile.UNRAR_TOOL = r"C:\Program Files\WinRAR\UnRAR.exe"
+                                with rarfile.RarFile(zip_file) as rf:
+                                    rf.extractall(temp_dir)
+                            except Exception as ex_rar:
+                                raise Exception(f"No se pudo descomprimir el archivo RAR ({str(ex_rar)}). Verifique que no tenga contraseña o cárguelo como .ZIP.")
+                        else:
+                            with zipfile.ZipFile(zip_file) as z:
+                                z.extractall(temp_dir)
                             
                         # Find the folder containing the ING folders
                         scan_root = temp_dir
@@ -597,7 +608,7 @@ def show_design_loader():
                         st.session_state["last_scanned_path"] = import_path
                         run_scan = True
                     except Exception as e:
-                        st.error(f"❌ Error al descomprimir el archivo ZIP: {str(e)}")
+                        st.error(f"❌ Error al descomprimir el archivo: {str(e)}")
                         run_scan = False
                         
         if run_scan:
