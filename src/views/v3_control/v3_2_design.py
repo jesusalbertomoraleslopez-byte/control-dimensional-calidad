@@ -497,13 +497,51 @@ def show_design_loader():
             key="import_method_radio"
         )
         
+        default_official_path = "Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS"
+        if "bulk_import_path" not in st.session_state:
+            st.session_state["bulk_import_path"] = default_official_path if os.path.exists(default_official_path) else ""
+            
         import_path = ""
         zip_file = None
         
         if import_method == "Escanear Carpeta Local/Red (Requiere ejecutar en Localhost)":
-            import_path = st.text_input("Ruta de la Carpeta (Ej: Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS)", value="")
-            if import_path:
-                import_path = import_path.strip().strip('"').strip("'")
+            if not os.path.exists("Z:\\") and os.name != "nt":
+                st.info("☁️ **Estás navegando en la versión en la Nube (Streamlit Cloud):** Los servidores remotos no pueden acceder directamente a la unidad física `Z:\\` de tu red local. Para importar nuevos diseños desde la nube, utiliza la opción **'Cargar Archivo Comprimido (.ZIP)'** o ejecuta la aplicación desde tu computadora local / Concentradora.")
+
+            col_in, col_browse, col_def = st.columns([3.2, 1.2, 1.2])
+            with col_in:
+                import_path = st.text_input(
+                    "Ruta de la Carpeta de Ingeniería:", 
+                    value=st.session_state.get("bulk_import_path", default_official_path if os.path.exists(default_official_path) else ""),
+                    placeholder="Ej: Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS",
+                    key="txt_bulk_import_path"
+                )
+                st.session_state["bulk_import_path"] = import_path
+                if import_path:
+                    import_path = import_path.strip().strip('"').strip("'")
+            with col_browse:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                btn_browse = st.button("📁 Examinar...", help="Abre una ventana para buscar y seleccionar la carpeta desde tu computadora", key="btn_browse_folder")
+                if btn_browse:
+                    try:
+                        import tkinter as tk
+                        from tkinter import filedialog
+                        root = tk.Tk()
+                        root.withdraw()
+                        root.wm_attributes('-topmost', 1)
+                        curr_dir = import_path if (import_path and os.path.exists(import_path)) else ("Z:\\" if os.path.exists("Z:\\") else None)
+                        selected_dir = filedialog.askdirectory(title="Seleccionar Carpeta de Base de Datos de Ingeniería SIGRAMA", initialdir=curr_dir)
+                        root.destroy()
+                        if selected_dir:
+                            st.session_state["bulk_import_path"] = os.path.normpath(selected_dir)
+                            st.rerun()
+                    except Exception as e:
+                        st.warning(f"No se pudo abrir el explorador de carpetas en este entorno ({str(e)}). Ingrese la ruta manualmente o use la versión local.")
+            with col_def:
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                if st.button("⚡ Ruta Z:\\ Oficial", help="Cargar automáticamente la ruta oficial de Ingeniería SIGRAMA", key="btn_official_z_path"):
+                    st.session_state["bulk_import_path"] = default_official_path
+                    st.rerun()
         else:
             zip_file = st.file_uploader("Cargar Archivo ZIP con Estructura de Ingeniería", type=["zip"])
         
