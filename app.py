@@ -288,6 +288,19 @@ def show_banner():
         """, unsafe_allow_html=True)
 
 # Auth Flow
+# Soporte SSO desde Concentradora SIGRAMA
+try:
+    sso_token = st.query_params.get("sso_token")
+    sso_user = st.query_params.get("sso_user")
+    if sso_token == "SIGRAMA_AUTH_TOKEN" and sso_user:
+        st.session_state["logged_in"] = True
+        st.session_state["username"] = sso_user
+        st.session_state["nombre_completo"] = sso_user
+        sso_role = st.query_params.get("sso_role", "Usuario")
+        st.session_state["role"] = "admin" if sso_role == "Admin" else "operador"
+except Exception:
+    pass
+
 if not st.session_state["logged_in"]:
     show_banner()
     
