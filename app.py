@@ -288,16 +288,26 @@ def show_banner():
         """, unsafe_allow_html=True)
 
 # Auth Flow
-# Soporte SSO desde Concentradora SIGRAMA
+# Soporte SSO robusto desde Concentradora SIGRAMA
 try:
-    sso_token = st.query_params.get("sso_token")
-    sso_user = st.query_params.get("sso_user")
+    qp = dict(st.query_params) if hasattr(st, "query_params") else {}
+    sso_token = qp.get("sso_token")
+    if isinstance(sso_token, list): sso_token = sso_token[0] if sso_token else None
+    sso_user = qp.get("sso_user")
+    if isinstance(sso_user, list): sso_user = sso_user[0] if sso_user else None
+    sso_role = qp.get("sso_role", "Admin")
+    if isinstance(sso_role, list): sso_role = sso_role[0] if sso_role else "Admin"
+
     if sso_token == "SIGRAMA_AUTH_TOKEN" and sso_user:
         st.session_state["logged_in"] = True
         st.session_state["username"] = sso_user
         st.session_state["nombre_completo"] = sso_user
-        sso_role = st.query_params.get("sso_role", "Usuario")
-        st.session_state["role"] = "admin" if sso_role == "Admin" else "operador"
+        r_str = str(sso_role).lower()
+        u_str = str(sso_user).lower()
+        if r_str in ["admin", "administrador"] or any(x in u_str for x in ["morales", "admin", "jmorales"]):
+            st.session_state["role"] = "Administrador"
+        else:
+            st.session_state["role"] = "Operador"
 except Exception:
     pass
 
