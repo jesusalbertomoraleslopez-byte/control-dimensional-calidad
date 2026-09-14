@@ -1,5 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
+from pathlib import Path
 from src.database import initialize_database
 from src.auth import check_login, logout
 
@@ -254,6 +256,28 @@ st.markdown("""
         document.addEventListener('keyup', preventStreamlitHotkeys, true);
     }
 " style="display:none;">""", unsafe_allow_html=True)
+
+components.html("""
+<script>
+(function() {
+  function hideFooter() {
+    document.querySelectorAll('footer').forEach(function(el) { el.style.display='none'; });
+    ['stFooter','stDecoration','stViewerBadge'].forEach(function(id) {
+      document.querySelectorAll('[data-testid="'+id+'"]').forEach(function(el) { el.style.display='none'; });
+    });
+    document.querySelectorAll('div[class*="viewerBadge"],div[class*="ProfileButton"],a[href*="streamlit.io"]').forEach(function(el) { el.style.display='none'; });
+  }
+  var observer = new MutationObserver(hideFooter);
+  observer.observe(document.documentElement, {childList:true, subtree:true});
+  hideFooter();
+})();
+</script>
+""", height=0)
+
+# === BANNER SIGRAMA ===
+_banner_path = Path(__file__).resolve().parent / "banner_sigrama.png"
+if _banner_path.exists():
+    st.image(str(_banner_path), use_container_width=True)
 
 # Session State Initialization
 if "logged_in" not in st.session_state:
