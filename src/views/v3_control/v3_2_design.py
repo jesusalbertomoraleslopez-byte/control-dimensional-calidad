@@ -572,6 +572,7 @@ def show_design_loader():
                 else:
                     import zipfile
                     import shutil
+                    import subprocess
                     
                     temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "temp_bulk_import")
                     if os.path.exists(temp_dir):
@@ -579,27 +580,135 @@ def show_design_loader():
                     os.makedirs(temp_dir, exist_ok=True)
                     
                     try:
-                        file_name_lower = getattr(zip_file, "name", "").lower()
-                        if file_name_lower.endswith(".rar"):
+                        archive_name = getattr(zip_file, "name", "archivo_comprimido.rar")
+                        raw_archive_path = os.path.join(temp_dir, archive_name)
+                        
+                        # Guardar archivo en disco físico por bloques para evitar desbordes de memoria y errores de buffer en rarfile
+                        zip_file.seek(0)
+                        with open(raw_archive_path, "wb") as f_out:
+                            while True:
+                                chunk = zip_file.read(1024 * 1024 * 8)
+                                if not chunk:
+                                    break
+                                f_out.write(chunk)
+                                
+                        file_name_lower = archive_name.lower()
+                        extracted = False
+                        err_details = []
+                        
+                        # 1. Intentar descompresión ZIP si termina en .zip
+                        if file_name_lower.endswith(".zip"):
                             try:
-                                import rarfile
-                                if os.path.exists(r"C:\Program Files\WinRAR\UnRAR.exe"):
-                                    rarfile.UNRAR_TOOL = r"C:\Program Files\WinRAR\UnRAR.exe"
-                                with rarfile.RarFile(zip_file) as rf:
-                                    rf.extractall(temp_dir)
-                            except Exception as ex_rar:
-                                raise Exception(f"No se pudo descomprimir el archivo RAR ({str(ex_rar)}). Verifique que no tenga contraseña o cárguelo como .ZIP.")
-                        else:
-                            with zipfile.ZipFile(zip_file) as z:
-                                z.extractall(temp_dir)
+                                with zipfile.ZipFile(raw_archive_path) as z:
+                                    z.extractall(temp_dir)
+                                extracted = True
+                            except Exception as e_zip:
+                                err_details.append(f"ZipFile: {e_zip}")
+                                
+                        # 2. Descompresión RAR y multiformato
+                        if not extracted:
+                            # 2.1 unar CLI (Linux Streamlit Cloud o si existe en PATH)
+                            unar_bin = shutil.which("unar")
+                            if unar_bin:
+                                try:
+                                    res_unar = subprocess.run([unar_bin, "-o", temp_dir, "-f", raw_archive_path], capture_output=True, text=True)
+                                    if res_unar.returncode == 0:
+                                        extracted = True
+                                    else:
+                                        err_details.append(f"unar CLI: {res_unar.stderr.strip() or res_unar.stdout.strip()}")
+                                except Exception as e_u:
+                                    err_details.append(f"unar error: {e_u}")
+                                    
+                            # 2.2 UnRAR.exe / WinRAR.exe (Windows)
+                            if not extracted:
+                                winrar_candidates = [
+                                    shutil.which("UnRAR"),
+                                    shutil.which("unrar"),
+                                    r"C:\Program Files\WinRAR\UnRAR.exe",
+                                    r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
+                                    r"C:\Program Files\WinRAR\WinRAR.exe",
+                                    r"C:\Program Files (x86)\WinRAR\WinRAR.exe",
+                                ]
+                                for candidate in winrar_candidates:
+                                    if candidate and os.path.exists(candidate):
+                                        try:
+                                            dest_arg = temp_dir.rstrip(os.sep) + os.sep
+                                            res_unrar = subprocess.run([candidate, "x", "-y", "-o+", raw_archive_path, dest_arg], capture_output=True, text=True)
+                                            if res_unrar.returncode == 0:
+                                                extracted = True
+                                                break
+                                            else:
+                                                err_details.append(f"WinRAR: {res_unrar.stderr.strip() or res_unrar.stdout.strip()}")
+                                        except Exception as e_w:
+                                            err_details.append(f"WinRAR error: {e_w}")
+                                            
+                            # 2.3 7-Zip CLI (si existe)
+                            if not extracted:
+                                sz_candidates = [
+                                    shutil.which("7z"),
+                                    shutil.which("7za"),
+                                    r"C:\Program Files\7-Zip\7z.exe",
+                                    r"C:\Program Files (x86)\7-Zip\7z.exe",
+                                ]
+                                for sz in sz_candidates:
+                                    if sz and os.path.exists(sz):
+                                        try:
+                                            res_sz = subprocess.run([sz, "x", "-y", f"-o{temp_dir}", raw_archive_path], capture_output=True, text=True)
+                                            if res_sz.returncode == 0:
+                                                extracted = True
+                                                break
+                                        except Exception as e_7:
+                                            err_details.append(f"7z error: {e_7}")
+
+                            # 2.4 Biblioteca Python rarfile
+                            if not extracted:
+                                try:
+                                    import rarfile
+                                    for tool_cand in [
+                                        r"C:\Program Files\WinRAR\UnRAR.exe",
+                                        r"C:\Program Files (x86)\WinRAR\UnRAR.exe",
+                                        shutil.which("unar"),
+                                        shutil.which("unrar")
+                                    ]:
+                                        if tool_cand and os.path.exists(tool_cand):
+                                            rarfile.UNRAR_TOOL = tool_cand
+                                            break
+                                    with rarfile.RarFile(raw_archive_path) as rf:
+                                        rf.extractall(temp_dir)
+                                    extracted = True
+                                except Exception as e_rf:
+                                    err_details.append(f"rarfile: {e_rf}")
+
+                            # 2.5 Fallback por si era archivo ZIP con otra extensión
+                            if not extracted:
+                                try:
+                                    with zipfile.ZipFile(raw_archive_path) as z:
+                                        z.extractall(temp_dir)
+                                    extracted = True
+                                except Exception:
+                                    pass
+
+                        # Eliminar el archivo contenedor temporal del directorio
+                        try:
+                            if os.path.exists(raw_archive_path):
+                                os.remove(raw_archive_path)
+                        except Exception:
+                            pass
                             
-                        # Find the folder containing the ING folders
+                        if not extracted:
+                            msg_det = " | ".join(err_details) if err_details else "Verifique que el archivo no esté dañado ni protegido por contraseña."
+                            raise Exception(f"No se pudo descomprimir el archivo '{archive_name}'. Detalle: {msg_det}")
+
+                        # Localizar la carpeta que contiene las subcarpetas ING...
                         scan_root = temp_dir
                         import re
-                        for _ in range(3):
-                            contents = [c for c in os.listdir(scan_root) if os.path.isdir(os.path.join(scan_root, c)) and not c.startswith(".")]
-                            if len(contents) == 1 and not re.match(r"ING\d+", contents[0]):
-                                scan_root = os.path.join(scan_root, contents[0])
+                        for _ in range(6):
+                            dir_items = [c for c in os.listdir(scan_root) if os.path.isdir(os.path.join(scan_root, c)) and not c.startswith(".")]
+                            has_ing = any(re.match(r"ING\d+", c, re.IGNORECASE) for c in dir_items)
+                            if has_ing:
+                                break
+                            if len(dir_items) == 1:
+                                scan_root = os.path.join(scan_root, dir_items[0])
                             else:
                                 break
                                 
