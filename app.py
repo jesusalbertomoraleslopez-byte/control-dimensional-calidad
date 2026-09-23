@@ -16,8 +16,13 @@ st.set_page_config(
 
 # Note: Streamlit's global hotkey listener is intercepted below in the main st.markdown block via inline HTML
 
-# Initialize Database
-initialize_database()
+# Initialize Database (Once per process lifecycle with thread-safe caching)
+@st.cache_resource
+def get_database_ready():
+    initialize_database()
+    return True
+
+get_database_ready()
 
 # Inject Custom CSS for Premium Look & Feel and Corporate Branding
 st.markdown("""
