@@ -238,8 +238,14 @@ def generate_excel_template_empty():
 def generate_custom_excel_template(file_path):
     """
     Lee las especificaciones desde el Excel de diseño y las devuelve como plantilla vacía para medición.
-    Asegura las columnas de proceso vacías.
+    Asegura las columnas de proceso vacías. Admite rutas locales o URIs de GCS.
     """
+    if isinstance(file_path, str) and (file_path.startswith("gs://") or not os.path.exists(file_path)):
+        from src.services.gcs_storage import get_file_bytes
+        raw_b = get_file_bytes(file_path)
+        if raw_b:
+            file_path = io.BytesIO(raw_b)
+
     xls = pd.ExcelFile(file_path)
     sheets = xls.sheet_names
     
@@ -372,8 +378,10 @@ def show_spc_excel():
     
     # Check if the Excel from Engineering exists
     has_design_excel = False
-    if archivo_excel_resumen and os.path.exists(archivo_excel_resumen):
-        has_design_excel = True
+    if archivo_excel_resumen:
+        from src.services.gcs_storage import get_file_bytes
+        if get_file_bytes(archivo_excel_resumen) is not None:
+            has_design_excel = True
         
     if has_design_excel:
         st.success(f"✅ Formato de medición personalizado disponible para esta pieza (cargado por Ingeniería).")

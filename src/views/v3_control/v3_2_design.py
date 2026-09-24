@@ -221,12 +221,20 @@ def show_design_loader():
                     "step": (file_step, f"{sku_generated}.step") if file_step else (None, "")
                 }
                 
+                from src.services.gcs_storage import is_gcs_available, upload_file_to_gcs
+                gcs_ready = is_gcs_available()
+
                 for file_key, (file_obj, filename) in uploaded_files.items():
                     if file_obj is not None:
                         file_path = os.path.join(dest_dir, filename)
                         with open(file_path, "wb") as f:
                             f.write(file_obj.getbuffer())
-                        saved_paths[file_key] = file_path
+                        if gcs_ready:
+                            rel_blob = f"Proyectos/{part_no}/Rev_{revision}/FactorK_{factor_k}/Espesor_{mat_espesor:.3f}/{filename}"
+                            ok_gcs, gcs_uri = upload_file_to_gcs(file_path, rel_blob)
+                            saved_paths[file_key] = gcs_uri if ok_gcs else file_path
+                        else:
+                            saved_paths[file_key] = file_path
                         
                 # 3. Save details to SQLite Database
                 try:
@@ -364,30 +372,33 @@ def show_design_loader():
             # Show download options if already validated/liberated
             if piece_sel["documento_primera_pieza"] or piece_sel["plano_validado_impreso"]:
                 st.markdown("##### 📥 Documentos de Validación Existentes:")
+                from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
                 col_dl1, col_dl2 = st.columns(2)
                 with col_dl1:
                     path_vobo = piece_sel["documento_primera_pieza"]
-                    if path_vobo and os.path.exists(path_vobo):
-                        with open(path_vobo, "rb") as f:
-                            vobo_bytes = f.read()
+                    vobo_bytes = get_file_bytes(path_vobo) if path_vobo else None
+                    if vobo_bytes:
+                        clean_vobo_name = os.path.basename(str(path_vobo).replace("\\", "/").split("?")[0])
                         st.download_button(
                             label="📥 Descargar PDF VoBo Subido",
                             data=vobo_bytes,
-                            file_name=os.path.basename(path_vobo),
+                            file_name=clean_vobo_name,
                             mime="application/pdf",
-                            key="btn_dl_existing_vobo_blue"
+                            key="btn_dl_existing_vobo_blue",
+                            use_container_width=True
                         )
                 with col_dl2:
                     path_plano = piece_sel["plano_validado_impreso"]
-                    if path_plano and os.path.exists(path_plano):
-                        with open(path_plano, "rb") as f:
-                            plano_bytes = f.read()
+                    plano_bytes = get_file_bytes(path_plano) if path_plano else None
+                    if plano_bytes:
+                        clean_plano_name = os.path.basename(str(path_plano).replace("\\", "/").split("?")[0])
                         st.download_button(
                             label="📥 Descargar Plano Validado Impreso",
                             data=plano_bytes,
-                            file_name=os.path.basename(path_plano),
+                            file_name=clean_plano_name,
                             mime="application/pdf",
-                            key="btn_dl_existing_plano_blue"
+                            key="btn_dl_existing_plano_blue",
+                            use_container_width=True
                         )
                 st.markdown("---")
             
@@ -408,22 +419,43 @@ def show_design_loader():
                     elif not accept_verification:
                         st.error("Error: Debe confirmar la validación dimensional visual del reporte contra el físico.")
                     else:
-                        dest_dir = piece_sel["ruta_almacenamiento"]
+                        storage_path = piece_sel["ruta_almacenamiento"]
+                        val_filename = f"Plano_Validado_{piece_sel['nombre_sku']}.pdf"
+                        vobo_filename = f"VoBo_Primera_Pieza_{piece_sel['nombre_sku']}.pdf"
                         
-                        # 1. Save uploaded validated plan
-                        val_pdf_path = os.path.join(dest_dir, f"Plano_Validado_{piece_sel['nombre_sku']}.pdf")
-                        with open(val_pdf_path, "wb") as f:
-                            f.write(file_plano_val.read())
+                        file_plano_val.seek(0)
+                        val_bytes = file_plano_val.read()
+                        file_vobo_val.seek(0)
+                        vobo_bytes = file_vobo_val.read()
+
+                        from src.services.gcs_storage import is_gcs_available, upload_file_to_gcs, normalize_blob_name
+                        val_db_path = None
+                        vobo_db_path = None
+                        
+                        if is_gcs_available():
+                            blob_base = normalize_blob_name(storage_path)
+                            ok1, uri1 = upload_file_to_gcs(val_bytes, f"{blob_base}/{val_filename}")
+                            if ok1: val_db_path = uri1
+                            ok2, uri2 = upload_file_to_gcs(vobo_bytes, f"{blob_base}/{vobo_filename}")
+                            if ok2: vobo_db_path = uri2
                             
-                        # 2. Save uploaded VoBo PDF
-                        vobo_pdf_path = os.path.join(dest_dir, f"VoBo_Primera_Pieza_{piece_sel['nombre_sku']}.pdf")
-                        with open(vobo_pdf_path, "wb") as f:
-                            f.write(file_vobo_val.read())
-                            
+                        # Respaldo local si no se conectó a GCS
+                        if not val_db_path or not vobo_db_path:
+                            local_dest = storage_path if not str(storage_path).startswith("gs://") else os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "Proyectos", piece_sel["nombre_sku"])
+                            os.makedirs(local_dest, exist_ok=True)
+                            val_local = os.path.join(local_dest, val_filename)
+                            with open(val_local, "wb") as f:
+                                f.write(val_bytes)
+                            vobo_local = os.path.join(local_dest, vobo_filename)
+                            with open(vobo_local, "wb") as f:
+                                f.write(vobo_bytes)
+                            if not val_db_path: val_db_path = val_local
+                            if not vobo_db_path: vobo_db_path = vobo_local
+
                         # 3. Update Database
                         cursor.execute(
                             "UPDATE piezas SET plano_validado_impreso = ?, documento_primera_pieza = ? WHERE id = ?",
-                            (val_pdf_path, vobo_pdf_path, piece_sel["id"])
+                            (val_db_path, vobo_db_path, piece_sel["id"])
                         )
                         conn.commit()
                         
@@ -1062,6 +1094,9 @@ def show_design_loader():
                             os.makedirs(dest_dir, exist_ok=True)
                             
                             saved_paths = {}
+                            from src.services.gcs_storage import is_gcs_available, upload_file_to_gcs
+                            gcs_ready = is_gcs_available()
+
                             for file_key, src_path in files.items():
                                 if src_path is not None:
                                     ext = os.path.splitext(src_path)[1]
@@ -1075,8 +1110,16 @@ def show_design_loader():
                                         filename = f"{sku}{ext}"
                                     dest_path = os.path.join(dest_dir, filename)
                                     shutil.copy2(src_path, dest_path)
-                                    saved_paths[file_key] = dest_path
-                                    
+
+                                    if gcs_ready:
+                                        rel_blob = f"Proyectos/{parsed['part_no']}/Rev_{parsed['revision']}/FactorK_{parsed['k_factor']}/Espesor_{mat_espesor:.3f}/{filename}"
+                                        ok_g, gcs_uri = upload_file_to_gcs(dest_path, rel_blob)
+                                        saved_paths[file_key] = gcs_uri if ok_g else dest_path
+                                    else:
+                                        saved_paths[file_key] = dest_path
+
+                            db_storage_path = f"gs://sigrama-planos-calidad-2026/Proyectos/{parsed['part_no']}/Rev_{parsed['revision']}/FactorK_{parsed['k_factor']}/Espesor_{mat_espesor:.3f}" if gcs_ready else dest_dir
+
                             cursor.execute(
                                 """
                                 INSERT OR REPLACE INTO piezas (
@@ -1089,7 +1132,7 @@ def show_design_loader():
                                 """,
                                 (
                                     parsed["part_no"], parsed["material"], parsed["finish"], int(parsed["k_factor"]), parsed["version"], parsed["revision"], sku,
-                                    mat_espesor, mat_ancho, mat_largo, dest_dir,
+                                    mat_espesor, mat_ancho, mat_largo, db_storage_path,
                                     saved_paths.get("pdf_orig"), saved_paths.get("dxf"), saved_paths.get("control_pdf"),
                                     saved_paths.get("slddrw"), saved_paths.get("sldprt"), saved_paths.get("xlsx"), saved_paths.get("step"),
                                     saved_paths.get("plano_validado"), saved_paths.get("vobo_pdf"), st.session_state["nombre_completo"]

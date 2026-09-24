@@ -47,5 +47,5 @@ credentials/
 # Project specific
 data/sigrama_calidad.db
 data/temp_bulk_import/
-# uncomment if you want to ignore generated files in Proyectos folder
-# src/Proyectos/**/*.pdf
+src/Proyectos/
+Proyectos/

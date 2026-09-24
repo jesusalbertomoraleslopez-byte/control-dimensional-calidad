@@ -125,6 +125,16 @@ def show_maintenance(sub_section=None):
                             if p_path and os.path.exists(p_path):
                                 shutil.rmtree(p_path)
                                 st.info(f"📂 Archivos físicos borrados en: `{p_path}`")
+
+                            # Clean up GCS objects if configured
+                            try:
+                                from src.services.gcs_storage import is_gcs_available, delete_gcs_folder
+                                if is_gcs_available() and p_path:
+                                    n_del = delete_gcs_folder(p_path)
+                                    if n_del > 0:
+                                        st.info(f"☁️ {n_del} archivos eliminados del Bucket de Google Cloud Storage.")
+                            except Exception:
+                                pass
                                 
                             st.success(f"✅ ¡Pieza SKU '{p_sku}' y todo su historial de mediciones fueron borrados con éxito!")
                             st.rerun()

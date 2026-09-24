@@ -96,8 +96,10 @@ def show_spc_excel():
     st.markdown("Descargue la plantilla de Excel oficial con bloqueo de especificaciones de ingeniería:")
 
     has_design_excel = False
-    if archivo_excel_resumen and os.path.exists(archivo_excel_resumen):
-        has_design_excel = True
+    if archivo_excel_resumen:
+        from src.services.gcs_storage import get_file_bytes
+        if get_file_bytes(archivo_excel_resumen) is not None:
+            has_design_excel = True
 
     if has_design_excel:
         st.success(f"✅ Formato de medición personalizado disponible para esta pieza.")

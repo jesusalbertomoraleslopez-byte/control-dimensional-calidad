@@ -1598,14 +1598,16 @@ def show_cad_viewer():
     with colpdf:
         st.markdown("#### 📄 Plano de Control (Vista Preliminar)")
 
-        pdf_orig_path = selected_piece["archivo_plano_control"] if selected_piece else None
-        # Fallback: try dibujo_original if plano_control is missing
-        if selected_piece and (not pdf_orig_path or not os.path.exists(str(pdf_orig_path))):
-            pdf_orig_path = selected_piece.get("archivo_dibujo_original")
+        from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
 
-        if pdf_orig_path and os.path.exists(str(pdf_orig_path)):
-            with open(pdf_orig_path, "rb") as f:
-                pdf_b64 = base64.b64encode(f.read()).decode("utf-8")
+        pdf_orig_path = selected_piece["archivo_plano_control"] if selected_piece else None
+        pdf_bytes = get_file_bytes(pdf_orig_path)
+        if not pdf_bytes and selected_piece and selected_piece.get("archivo_dibujo_original"):
+            pdf_orig_path = selected_piece.get("archivo_dibujo_original")
+            pdf_bytes = get_file_bytes(pdf_orig_path)
+
+        if pdf_bytes:
+            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
 
             pdfjs_html = f"""
             <!DOCTYPE html>
@@ -1689,15 +1691,28 @@ def show_cad_viewer():
             """
             components.html(pdfjs_html, height=520, scrolling=False)
 
-            # Download button below preview
-            with open(pdf_orig_path, "rb") as f:
+            # Download button & Signed URL below preview
+            clean_filename = os.path.basename(str(pdf_orig_path).replace("\\", "/").split("?")[0])
+            signed_url = generate_secure_signed_url(pdf_orig_path, expiration_minutes=15)
+            
+            c_dl1, c_dl2 = st.columns([1, 1])
+            with c_dl1:
                 st.download_button(
-                    label="📥 Descargar Plano de Control (PDF)",
-                    data=f.read(),
-                    file_name=os.path.basename(pdf_orig_path),
+                    label="📥 Descargar Plano (PDF)",
+                    data=pdf_bytes,
+                    file_name=clean_filename,
                     mime="application/pdf",
-                    key="btn_dl_plano_orig_blue"
+                    key="btn_dl_plano_orig_blue",
+                    use_container_width=True
                 )
+            with c_dl2:
+                if signed_url:
+                    st.link_button(
+                        "🔒 Abrir Enlace Seguro Cloud (15 min)",
+                        url=signed_url,
+                        use_container_width=True,
+                        help="Enlace protegido temporal con firma criptográfica IAM de Google Cloud."
+                    )
 
         else:
             st.markdown(

@@ -10,4 +10,4 @@ trimesh>=3.23.5
 scipy>=1.10.0
 python-docx>=1.0.0
 rarfile>=4.0
-
+google-cloud-storage>=2.14.0
