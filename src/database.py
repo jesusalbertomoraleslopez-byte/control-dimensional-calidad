@@ -6,6 +6,47 @@ from datetime import datetime
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 DB_PATH = os.path.join(DB_DIR, "sigrama_calidad.db")
 
+# GCS blob name where the database is persisted (survives redeployments)
+GCS_DB_BLOB = "system/sigrama_calidad.db"
+
+def _sync_db_from_gcs():
+    """
+    Al arrancar, si la base de datos local no existe o está vacía,
+    la descarga desde el Bucket de GCS para restaurar el estado persistente
+    (auditorías, mediciones, etc.) que sobrevive a los redeployments de Streamlit Cloud.
+    """
+    if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 8192:
+        return  # DB local ya tiene datos, no necesitamos descargar
+    try:
+        from src.services.gcs_storage import get_bucket
+        bucket = get_bucket()
+        if bucket is None:
+            return
+        blob = bucket.blob(GCS_DB_BLOB)
+        if blob.exists():
+            os.makedirs(DB_DIR, exist_ok=True)
+            blob.download_to_filename(DB_PATH)
+    except Exception:
+        pass  # Silencioso: si falla, continuamos con DB local/nueva
+
+def save_database_to_gcs():
+    """
+    Persiste la base de datos local hacia el Bucket de GCS.
+    Llamar después de cada operación de escritura importante
+    (auditar pieza, guardar lote, etc.) para garantizar durabilidad.
+    """
+    if not os.path.exists(DB_PATH):
+        return
+    try:
+        from src.services.gcs_storage import get_bucket
+        bucket = get_bucket()
+        if bucket is None:
+            return
+        blob = bucket.blob(GCS_DB_BLOB)
+        blob.upload_from_filename(DB_PATH, content_type="application/octet-stream")
+    except Exception:
+        pass  # Silencioso: la app continúa aunque no pueda guardar en GCS
+
 def get_connection():
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=60.0)
@@ -21,6 +62,9 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def initialize_database():
+    # PASO 0: Intentar restaurar la DB persistida en GCS antes de inicializar esquema/datos
+    _sync_db_from_gcs()
+
     conn = get_connection()
     cursor = conn.cursor()
     

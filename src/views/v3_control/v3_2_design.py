@@ -114,6 +114,8 @@ def show_design_loader():
                         WHERE (estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL) AND documentos_completos = 1
                     """, (admin_name,))
                     conn.commit()
+                    from src.database import save_database_to_gcs
+                    save_database_to_gcs()
                     st.success(f"🎉 Se han auditado y aprobado {cnt_completas_pendientes} piezas con éxito.")
                     import time
                     time.sleep(1)
@@ -122,6 +124,8 @@ def show_design_loader():
                 if st.button("🔄 Restablecer Todo el Catálogo a 'Sin Auditar'", key="btn_bulk_reset_all"):
                     cursor.execute("UPDATE piezas SET estatus_auditoria = 'Sin Auditar', fecha_auditoria = NULL, auditor_nombre = NULL")
                     conn.commit()
+                    from src.database import save_database_to_gcs
+                    save_database_to_gcs()
                     st.warning("Se restablecieron todas las piezas a 'Sin Auditar'.")
                     import time
                     time.sleep(1)
@@ -344,6 +348,8 @@ def show_design_loader():
                     WHERE id = ?
                 """, (admin_name, audit_notes, p_sel["id"]))
                 conn.commit()
+                from src.database import save_database_to_gcs
+                save_database_to_gcs()
                 st.success(f"🎉 ¡Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' auditada y aprobada con éxito! Ahora está disponible en el 3.1. Visualizador 3D CAD.")
                 import time
                 time.sleep(1)
@@ -360,6 +366,8 @@ def show_design_loader():
                     WHERE id = ?
                 """, (admin_name, audit_notes, p_sel["id"]))
                 conn.commit()
+                from src.database import save_database_to_gcs
+                save_database_to_gcs()
                 st.warning(f"⚠️ Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' marcada como Rechazada con observaciones.")
                 import time
                 time.sleep(1)
@@ -374,6 +382,8 @@ def show_design_loader():
                     WHERE id = ?
                 """, (p_sel["id"],))
                 conn.commit()
+                from src.database import save_database_to_gcs
+                save_database_to_gcs()
                 st.info(f"Pieza restablecida a 'Sin Auditar'.")
                 import time
                 time.sleep(1)
