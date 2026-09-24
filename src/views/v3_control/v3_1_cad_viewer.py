@@ -650,11 +650,15 @@ def show_cad_viewer():
                 gap: 5px;
             }}
         </style>
-        <!-- Load Three.js and OrbitControls -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+        <!-- Three.js via importmap - version r158 estable en CDN confiable -->
+        <script type="importmap">
+        {{
+          "imports": {{
+            "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+          }}
+        }}
+        </script>
     </head>
     <body>
         <div id="info-overlay">
@@ -685,22 +689,17 @@ def show_cad_viewer():
         </select>
         <div id="canvas-container"></div>
         
-        <script>
+        <script type="module">
+            import * as THREE from 'three';
+            import {{ OrbitControls }} from 'three/addons/controls/OrbitControls.js';
+            import {{ STLLoader }} from 'three/addons/loaders/STLLoader.js';
+            import {{ CSS2DRenderer, CSS2DObject }} from 'three/addons/renderers/CSS2DRenderer.js';
+
+            // Expose THREE globally so rest of code (buttons, etc.) can access it
+            window.THREE = THREE;
+
             // Set up scene, camera, renderer
             const container = document.getElementById('canvas-container');
-            
-            // Check if Three.js is loaded successfully
-            if (typeof THREE === 'undefined') {{
-                const errDiv = document.createElement('div');
-                errDiv.style.color = '#ef4444';
-                errDiv.style.padding = '25px';
-                errDiv.style.fontWeight = 'bold';
-                errDiv.style.background = '#0f172a';
-                errDiv.style.borderRadius = '8px';
-                errDiv.style.margin = '20px';
-                errDiv.innerHTML = '❌ Error: No se pudo cargar la librería Three.js de 3D. Verifique su conexión de red o configuraciones de proxy/CORS en el navegador.';
-                container.appendChild(errDiv);
-            }}
             
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0xe2e8f0);
@@ -720,24 +719,25 @@ def show_cad_viewer():
             const renderer = new THREE.WebGLRenderer({{ antialias: true }});
             renderer.setSize(width, 500);
             renderer.shadowMap.enabled = true;
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            renderer.physicallyCorrectLights = true;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
             container.appendChild(renderer.domElement);
             
             // CSS2D renderer for dimension labels
             let labelRenderer = null;
-            if (typeof THREE.CSS2DRenderer !== 'undefined') {{
-                labelRenderer = new THREE.CSS2DRenderer();
+            try {{
+                labelRenderer = new CSS2DRenderer();
                 labelRenderer.setSize(width, 500);
                 labelRenderer.domElement.style.position = 'absolute';
                 labelRenderer.domElement.style.top = '0';
                 labelRenderer.domElement.style.left = '0';
                 labelRenderer.domElement.style.pointerEvents = 'none';
                 container.appendChild(labelRenderer.domElement);
+            }} catch(e) {{
+                labelRenderer = null;
             }}
             
             // Orbit Controls
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            const controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             
@@ -901,7 +901,7 @@ def show_cad_viewer():
                         bytes[i] = binaryString.charCodeAt(i);
                     }}
                     
-                    const loader = new THREE.STLLoader();
+                    const loader = new STLLoader();
                     const geometry = loader.parse(bytes.buffer);
                     
                     geometry.center();
@@ -1459,7 +1459,7 @@ def show_cad_viewer():
                     const div = document.createElement('div');
                     div.className = 'dim-label';
                     div.textContent = text;
-                    const lbl = new THREE.CSS2DObject(div);
+                    const lbl = new CSS2DObject(div);
                     lbl.position.copy(pos);
                     dimGroup.add(lbl);
                 }}
