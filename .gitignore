@@ -40,6 +40,9 @@ package-lock.json
 .env
 .flaskenv
 *.log
+credentials/
+*.json
+.streamlit/secrets.toml
 
 # Project specific
 data/sigrama_calidad.db
