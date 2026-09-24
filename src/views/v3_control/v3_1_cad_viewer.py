@@ -336,19 +336,33 @@ def show_cad_viewer():
         # Check if physical step/stl file was uploaded and exists (local or GCS)
         from src.services.gcs_storage import get_file_bytes
         step_path = selected_piece.get("archivo_step")
-        file_bytes = get_file_bytes(step_path) if step_path else None
+
+        # Cache file bytes in session_state keyed by step_path to avoid
+        # re-downloading from GCS on every Streamlit rerender
+        cache_key = f"_step_bytes_{step_path}"
+        if step_path:
+            if cache_key not in st.session_state or st.session_state.get("_step_cache_key") != step_path:
+                with st.spinner("⏳ Descargando modelo 3D desde la nube..."):
+                    file_bytes = get_file_bytes(step_path)
+                st.session_state[cache_key] = file_bytes
+                st.session_state["_step_cache_key"] = step_path
+            else:
+                file_bytes = st.session_state[cache_key]
+        else:
+            file_bytes = None
+
         if file_bytes:
             clean_name = os.path.basename(str(step_path).replace('\\', '/').split('?')[0])
             file_ext = os.path.splitext(clean_name)[1].lower()
             if file_ext == ".stl":
                 stl_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "stl"
-                st.success(f"✅ Cargado modelo STL registrado: `{clean_name}`")
+                st.success(f"✅ Modelo STL: `{clean_name}` ({len(file_bytes)//1024} KB)")
             elif file_ext in [".step", ".stp"]:
                 step_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "step"
                 step_units = detect_step_units(file_bytes)
-                st.success(f"✅ Cargado modelo STEP registrado: `{clean_name}` ({step_units})")
+                st.success(f"✅ Modelo STEP: `{clean_name}` ({len(file_bytes)//1024} KB) — El visor 3D tardará unos segundos en triangular la geometría CAD")
         else:
             file_type = "mock"
             st.info("💡 Renderizando malla dinámica en base a parámetros registrados (No se encontró archivo STEP/STL físico)")
@@ -938,26 +952,63 @@ def show_cad_viewer():
                 }}
             }} else if (fileType === "step" && stepDataB64 !== "") {{
                 // Load and parse STEP file using occt-import-js
-                document.getElementById('info-overlay').innerHTML += "<div id='loading-status' style='color:#facc15;font-weight:bold;margin-top:5px;'>Cargando motor de triangulación CAD (WASM)...</div>";
-                
-                // Fetch the WASM binary ourselves to avoid Emscripten same-origin fetch restrictions
-                fetch("https://unpkg.com/occt-import-js@0.0.12/dist/occt-import-js.wasm")
+                // Show a visible loading progress bar on the 3D canvas while WASM loads
+                const progressHtml = `
+                  <div id="wasm-loading-overlay" style="
+                    position:absolute; top:0; left:0; width:100%; height:100%;
+                    background:rgba(15,23,42,0.92); display:flex; flex-direction:column;
+                    align-items:center; justify-content:center; z-index:500; border-radius:8px;">
+                    <div style="color:#38bdf8; font-size:2rem; margin-bottom:1rem;">⚙️</div>
+                    <div style="color:#fff; font-weight:bold; font-size:1rem; margin-bottom:0.7rem; font-family:monospace;">
+                      Cargando motor CAD 3D (WebAssembly)
+                    </div>
+                    <div id="wasm-prog-bar-wrap" style="width:320px; background:#1e293b; border-radius:8px; height:12px; overflow:hidden; border:1px solid #334155;">
+                      <div id="wasm-prog-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#0056b3,#38bdf8); border-radius:8px; transition:width 0.2s;"></div>
+                    </div>
+                    <div id="wasm-prog-label" style="color:#94a3b8; font-size:0.8rem; margin-top:0.5rem; font-family:monospace;">Iniciando descarga...</div>
+                  </div>`;
+                container.style.position = 'relative';
+                container.insertAdjacentHTML('beforeend', progressHtml);
+                const progBar = document.getElementById('wasm-prog-bar');
+                const progLabel = document.getElementById('wasm-prog-label');
+                const overlay = document.getElementById('wasm-loading-overlay');
+                document.getElementById('info-overlay').innerHTML += "<div id='loading-status' style='color:#facc15;font-weight:bold;margin-top:5px;'>Triangulando CAD...</div>";
+
+                // Use jsdelivr (faster than unpkg) for occt-import-js WASM
+                // Show download progress with ReadableStream
+                const wasmUrl = "https://cdn.jsdelivr.net/npm/occt-import-js@0.0.12/dist/occt-import-js.wasm";
+                fetch(wasmUrl)
                     .then(response => {{
-                        if (!response.ok) {{
-                            throw new Error("HTTP error, status = " + response.status);
+                        if (!response.ok) throw new Error("HTTP " + response.status);
+                        const total = parseInt(response.headers.get('Content-Length') || '8000000');
+                        let loaded = 0;
+                        const reader = response.body.getReader();
+                        const chunks = [];
+                        function pump() {{
+                            return reader.read().then({{ value, done }}) => {{
+                                if (done) {{
+                                    if (progBar) progBar.style.width = '80%';
+                                    if (progLabel) progLabel.textContent = 'Iniciando motor WASM...';
+                                    const blob = new Blob(chunks);
+                                    return blob.arrayBuffer();
+                                }}
+                                chunks.push(value);
+                                loaded += value.length;
+                                const pct = Math.min(75, Math.round((loaded / total) * 75));
+                                if (progBar) progBar.style.width = pct + '%';
+                                if (progLabel) progLabel.textContent = `Descargando: ${{Math.round(loaded/1024)}} KB / ${{Math.round(total/1024)}} KB`;
+                                return pump();
+                            }});
                         }}
-                        return response.arrayBuffer();
+                        return pump();
                     }})
                     .then(wasmBuffer => {{
-                        const Module = {{
-                            wasmBinary: wasmBuffer
-                        }};
-                        
-                        const lStatus = document.getElementById('loading-status');
-                        if (lStatus) lStatus.innerText = "Cargando módulo ES...";
-                        
+                        const Module = {{ wasmBinary: wasmBuffer }};
+                        if (progBar) progBar.style.width = '85%';
+                        if (progLabel) progLabel.textContent = 'Cargando módulo ES...';
                         return import("https://esm.sh/occt-import-js@0.0.12").then((m) => {{
-                            if (lStatus) lStatus.innerText = "Triangulando archivo STEP real...";
+                            if (progBar) progBar.style.width = '95%';
+                            if (progLabel) progLabel.textContent = 'Triangulando geometría STEP...';
                             const factory = m.default;
                             return factory(Module);
                         }});
@@ -972,8 +1023,11 @@ def show_cad_viewer():
                             
                             const result = occt.ReadStepFile(bytes);
                             
+                            // Remove loading overlay - geometry is ready
                             const lStatus = document.getElementById('loading-status');
                             if (lStatus) lStatus.remove();
+                            if (overlay) overlay.remove();
+                            if (progBar) progBar.style.width = '100%';
                             
                             if (result.success && result.meshes && result.meshes.length > 0) {{
                                 const stepGroup = new THREE.Group();
@@ -1063,6 +1117,7 @@ def show_cad_viewer():
                                 // Aplicar estilo inicial
                                 aplicarEstilo('monochrome');
                             }} else {{
+                                if (overlay) overlay.remove();
                                 const errMsg = (result && result.error) || "No se encontraron mallas 3D en el archivo STEP.";
                                 console.error("STEP parsing succeeded but no meshes returned: ", errMsg);
                                 const lStatus = document.getElementById('loading-status');
@@ -1075,6 +1130,7 @@ def show_cad_viewer():
                                 drawMockPiece();
                             }}
                         }} catch (err) {{
+                            if (overlay) overlay.remove();
                             console.error("Error processing STEP: ", err);
                             const lStatus = document.getElementById('loading-status');
                             if (lStatus) {{
@@ -1087,6 +1143,7 @@ def show_cad_viewer():
                         }}
                     }})
                     .catch((err) => {{
+                        if (overlay) overlay.remove();
                         console.error("Failed to load/parse WASM: ", err);
                         const lStatus = document.getElementById('loading-status');
                         if (lStatus) {{
