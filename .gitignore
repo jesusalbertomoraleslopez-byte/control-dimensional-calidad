@@ -42,6 +42,7 @@ package-lock.json
 *.log
 credentials/
 *.json
+!data/seed_piezas.json
 .streamlit/secrets.toml
 
 # Project specific

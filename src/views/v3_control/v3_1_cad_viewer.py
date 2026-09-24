@@ -77,12 +77,39 @@ def show_cad_viewer():
         Esta sección permite cargar o seleccionar archivos de diseño (ej. `.STL` o `.STEP`) para su inspección visual tridimensional y medición de cotas generales.
     """)
 
-    # 1. Database connection and querying
+    # 1. Database connection and querying (REGLA DE ORO: SOLO PIEZAS AUDITADAS Y APROBADAS)
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM piezas ORDER BY nombre_sku")
+    cursor.execute("""
+        SELECT * FROM piezas 
+        WHERE estatus_auditoria = 'Auditada' 
+        ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku
+    """)
     registered_pieces = [dict(r) for r in cursor.fetchall()]
+
+    # Contar piezas pendientes de auditoría
+    cursor.execute("SELECT COUNT(*) FROM piezas WHERE estatus_auditoria != 'Auditada' OR estatus_auditoria IS NULL")
+    unaudited_count = cursor.fetchone()[0]
     conn.close()
+
+    if len(registered_pieces) == 0:
+        st.markdown(f"""
+        <div style="background:#FFFBEB; border-left:6px solid #F59E0B; border-radius:8px; padding:1.3rem 1.5rem; margin-bottom:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+            <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem;">
+                <span style="font-size:1.4rem;">🛡️</span>
+                <span style="color:#B45309; font-weight:800; font-size:1.1rem; font-family:'Montserrat',sans-serif;">
+                    Proceso de Validación y Auditoría de Planos Requerido
+                </span>
+            </div>
+            <p style="color:#92400E; margin:0 0 0.8rem 0; font-size:0.95rem; font-family:'Questrial',sans-serif; line-height:1.5;">
+                Actualmente existen <b>{unaudited_count} piezas</b> en la base de datos oficial en estatus <b>'Sin Auditar'</b>. 
+                Por normativa estricta de Ingeniería y Calidad, ningún plano ni modelo 3D puede visualizarse en piso hasta que el <b>Administrador</b> haya auditado y aprobado que la pieza cuenta con toda su documentación completa (PDF de Control, DXF, Modelo 3D y Hoja de Especificaciones).
+            </p>
+            <div style="background:#FEF3C7; padding:0.6rem 1rem; border-radius:6px; font-size:0.9rem; color:#78350F; font-family:'Questrial',sans-serif;">
+                👉 <b>Acción Requerida:</b> Ingrese a la sección <b>3.2. Carga de Registros de Diseño e Ingeniería</b> (Pestaña <b>3.2.1. Auditoría y Validación de Planos</b>) para revisar los documentos y auditar las piezas.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
     # ── Filter Panel ────────────────────────────────────────────────────────────
@@ -174,8 +201,13 @@ def show_cad_viewer():
         unsafe_allow_html=True
     )
 
-    # Dropdown with filtered results
-    piece_options = ["-- Cargar Archivo Manual --"] + [p["nombre_sku"] for p in filtered_pieces]
+    # Dropdown with filtered results (mostrando el consecutivo ING oficial si existe)
+    def format_piece_label(p):
+        ing = p.get("consecutivo_ing")
+        return f"[{ing}] {p['nombre_sku']}" if ing else p["nombre_sku"]
+
+    label_to_piece = {format_piece_label(p): p for p in filtered_pieces}
+    piece_options = ["-- Cargar Archivo Manual --"] + list(label_to_piece.keys())
     
     # Ensure current selection in session state is valid for new options list
     if "cad_piece_select" in st.session_state:
@@ -197,9 +229,7 @@ def show_cad_viewer():
             type=["step", "stp", "stl"]
         )
     else:
-        selected_piece = next(
-            (p for p in filtered_pieces if p["nombre_sku"] == selected_option), None
-        )
+        selected_piece = label_to_piece.get(selected_option)
         # Show piece info card
         if selected_piece:
             sku = selected_piece["nombre_sku"]
@@ -303,23 +333,22 @@ def show_cad_viewer():
         pieza_id_str = f"{selected_piece['numero_pieza']} ({selected_piece['nombre_sku'].split('(')[0].strip()})"
         sku_for_overlay = selected_piece["nombre_sku"].replace('"', '\\"').replace("'", "\\'")
         
-        # Check if physical step/stl file was uploaded and exists
-        step_path = selected_piece["archivo_step"]
-        if step_path and os.path.exists(step_path):
-            file_ext = os.path.splitext(step_path)[1].lower()
+        # Check if physical step/stl file was uploaded and exists (local or GCS)
+        from src.services.gcs_storage import get_file_bytes
+        step_path = selected_piece.get("archivo_step")
+        file_bytes = get_file_bytes(step_path) if step_path else None
+        if file_bytes:
+            clean_name = os.path.basename(str(step_path).replace('\\', '/').split('?')[0])
+            file_ext = os.path.splitext(clean_name)[1].lower()
             if file_ext == ".stl":
-                with open(step_path, "rb") as f:
-                    file_bytes = f.read()
                 stl_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "stl"
-                st.success(f"✅ Cargado modelo STL registrado: `{os.path.basename(step_path)}`")
+                st.success(f"✅ Cargado modelo STL registrado: `{clean_name}`")
             elif file_ext in [".step", ".stp"]:
-                with open(step_path, "rb") as f:
-                    file_bytes = f.read()
                 step_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "step"
                 step_units = detect_step_units(file_bytes)
-                st.success(f"✅ Cargado modelo STEP registrado: `{os.path.basename(step_path)}` ({step_units})")
+                st.success(f"✅ Cargado modelo STEP registrado: `{clean_name}` ({step_units})")
         else:
             file_type = "mock"
             st.info("💡 Renderizando malla dinámica en base a parámetros registrados (No se encontró archivo STEP/STL físico)")

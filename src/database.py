@@ -51,6 +51,7 @@ def initialize_database():
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS piezas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        consecutivo_ing TEXT,
         numero_pieza TEXT NOT NULL,
         material TEXT NOT NULL REFERENCES materias_primas(material),
         acabado_estandar TEXT NOT NULL,
@@ -73,10 +74,34 @@ def initialize_database():
         -- First piece validation evidence
         plano_validado_impreso TEXT,
         documento_primera_pieza TEXT,
+        -- Audit tracking
+        estatus_auditoria TEXT DEFAULT 'Sin Auditar',
+        fecha_auditoria TIMESTAMP,
+        auditor_nombre TEXT,
+        auditoria_notas TEXT,
+        documentos_completos INTEGER DEFAULT 0,
         usuario_registro TEXT NOT NULL,
         fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Dynamic migrations for existing databases
+    cursor.execute("PRAGMA table_info(piezas)")
+    existing_cols = [c[1] for c in cursor.fetchall()]
+    new_cols = [
+        ("consecutivo_ing", "TEXT"),
+        ("estatus_auditoria", "TEXT DEFAULT 'Sin Auditar'"),
+        ("fecha_auditoria", "TIMESTAMP"),
+        ("auditor_nombre", "TEXT"),
+        ("auditoria_notas", "TEXT"),
+        ("documentos_completos", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_def in new_cols:
+        if col_name not in existing_cols:
+            try:
+                cursor.execute(f"ALTER TABLE piezas ADD COLUMN {col_name} {col_def};")
+            except Exception:
+                pass
     
     # 4. Lotes Control Table
     cursor.execute("""
@@ -232,6 +257,41 @@ def initialize_database():
         piezas_existentes = 0
 
     if piezas_existentes == 0:
+        seed_path = os.path.join(DB_DIR, "seed_piezas.json")
+        if os.path.exists(seed_path):
+            import json
+            try:
+                with open(seed_path, "r", encoding="utf-8") as f:
+                    seed_data = json.load(f)
+                for item in seed_data:
+                    mat = item.get("material") or "16ga"
+                    esp = float(item.get("espesor_materia_prima") or 0.060)
+                    cursor.execute("INSERT OR IGNORE INTO materias_primas (material, espesor_nominal) VALUES (?, ?)", (mat, esp))
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO piezas (
+                        consecutivo_ing, numero_pieza, material, acabado_estandar, factor_k, version, revision, nombre_sku,
+                        espesor_materia_prima, ancho_materia_prima, largo_materia_prima, ruta_almacenamiento,
+                        archivo_dibujo_original, archivo_dxf, archivo_plano_control, archivo_plano_nativo_3d,
+                        archivo_dibujo_nativo_2d, archivo_excel_resumen, archivo_step,
+                        plano_validado_impreso, documento_primera_pieza,
+                        estatus_auditoria, fecha_auditoria, auditor_nombre, auditoria_notas,
+                        documentos_completos, usuario_registro, fecha_registro
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        item.get("consecutivo_ing"), item.get("numero_pieza"), item.get("material"), item.get("acabado_estandar"),
+                        item.get("factor_k"), item.get("version"), item.get("revision"), item.get("nombre_sku"),
+                        item.get("espesor_materia_prima", 0.0), item.get("ancho_materia_prima", 0.0), item.get("largo_materia_prima", 0.0),
+                        item.get("ruta_almacenamiento"), item.get("archivo_dibujo_original"), item.get("archivo_dxf"),
+                        item.get("archivo_plano_control"), item.get("archivo_plano_nativo_3d"), item.get("archivo_dibujo_nativo_2d"),
+                        item.get("archivo_excel_resumen"), item.get("archivo_step"), item.get("plano_validado_impreso"),
+                        item.get("documento_primera_pieza"), item.get("estatus_auditoria", "Sin Auditar"),
+                        item.get("fecha_auditoria"), item.get("auditor_nombre"), item.get("auditoria_notas"),
+                        item.get("documentos_completos", 0), item.get("usuario_registro", "Sistema"),
+                        item.get("fecha_registro")
+                    ))
+            except Exception:
+                pass
+
         proyectos_dir = os.path.join(os.path.dirname(__file__), "Proyectos")
         if os.path.exists(proyectos_dir):
             import re

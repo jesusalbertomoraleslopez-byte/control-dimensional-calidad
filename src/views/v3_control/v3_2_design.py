@@ -44,11 +44,12 @@ def show_design_loader():
     st.subheader("Generación Automática de SKU, Creación de Directorios y Carga de Archivos Requeridos")
     
     # Use tabs for 1. Registro de Diseño, 2. Evidencia de Primera Pieza, 3. Generador de Paquetes (Nesteo), and 4. Importación Masiva
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📁 3.2.1. Registro de Diseño e Ingeniería", 
-        "✔ 3.2.2. Validación de Primera Pieza",
-        "📦 3.2.3. Módulo Generador de Paquetes (Nesteo)",
-        "⚡ 3.2.4. Importación Masiva"
+    tab_audit, tab1, tab2, tab3, tab4 = st.tabs([
+        "🛡️ 3.2.1. Auditoría y Validación de Planos (Administrador)",
+        "📁 3.2.2. Registro de Diseño e Ingeniería", 
+        "✔ 3.2.3. Validación de Primera Pieza",
+        "📦 3.2.4. Módulo Generador de Paquetes (Nesteo)",
+        "⚡ 3.2.5. Importación Masiva"
     ])
     
     conn = get_connection()
@@ -60,6 +61,324 @@ def show_design_loader():
     mat_dict = {r["material"]: r["espesor_nominal"] for r in materials_db}
     material_options = list(mat_dict.keys())
     
+    with tab_audit:
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#111111 0%,#2A2A2A 100%);
+                    border-left:5px solid #EC2024;
+                    border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.2rem;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+          <div style="color:#fff;font-weight:800;font-size:1.2rem;font-family:'Montserrat';">
+            🛡️ Proceso Oficial de Validación y Auditoría de Planos
+          </div>
+          <div style="color:#D2D3D5;font-size:0.9rem;font-family:'Questrial';margin-top:0.3rem;">
+            Verificación técnica de expedientes inyectados desde la red <b>Z:\\02 - INGENIERIA\\BASE DE DATOS PRODUCTOS</b> o cargados al Bucket.
+            <b>Regla de Calidad:</b> Las piezas solo serán visibles en el <b>3.1. Visualizador 3D CAD</b> una vez que sean auditadas y aprobadas por el Administrador.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 1. KPIs de Auditoría en Tiempo Real
+        c_kpi1, c_kpi2, c_kpi3 = st.columns(3)
+        cursor.execute("SELECT COUNT(*) FROM piezas WHERE estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL")
+        cnt_sin_auditar = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM piezas WHERE estatus_auditoria = 'Auditada'")
+        cnt_auditadas = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM piezas")
+        cnt_total = cursor.fetchone()[0]
+
+        with c_kpi1:
+            st.metric("🔴 Piezas Sin Auditar", cnt_sin_auditar, help="Piezas pendientes de revisión. Bloqueadas para el Visor 3D CAD.")
+        with c_kpi2:
+            st.metric("🟢 Auditadas y Aprobadas", cnt_auditadas, help="Piezas aprobadas por el Administrador. Disponibles en el Visor 3D CAD.")
+        with c_kpi3:
+            st.metric("📦 Total de Piezas Registradas", cnt_total, help="Total en el catálogo de ingeniería.")
+
+        cursor.execute("SELECT COUNT(*) FROM piezas WHERE (estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL) AND documentos_completos = 1")
+        cnt_completas_pendientes = cursor.fetchone()[0]
+
+        with st.expander("⚡ Herramientas de Auditoría Masiva (Administrador)", expanded=False):
+            st.markdown(f"""
+            - **{cnt_completas_pendientes} piezas** cuentan con todos sus documentos técnicos indispensables (Plano PDF, DXF, Modelo 3D STEP y Hoja de Especificaciones).
+            - Puede aprobarlas en lote para agilizar la habilitación en piso y en el Visor 3D CAD, o auditarlas individualmente con revisión técnica a continuación.
+            """)
+            col_b1, col_b2 = st.columns([1, 1])
+            with col_b1:
+                if st.button(f"🚀 Aprobar en Lote ({cnt_completas_pendientes} Piezas con Documentación Completa)", type="primary", disabled=(cnt_completas_pendientes == 0), key="btn_bulk_approve_complete"):
+                    admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
+                    cursor.execute("""
+                        UPDATE piezas SET
+                            estatus_auditoria = 'Auditada',
+                            fecha_auditoria = CURRENT_TIMESTAMP,
+                            auditor_nombre = ?,
+                            auditoria_notas = 'Aprobación masiva automática por expediente técnico completo'
+                        WHERE (estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL) AND documentos_completos = 1
+                    """, (admin_name,))
+                    conn.commit()
+                    st.success(f"🎉 Se han auditado y aprobado {cnt_completas_pendientes} piezas con éxito.")
+                    import time
+                    time.sleep(1)
+                    st.rerun()
+            with col_b2:
+                if st.button("🔄 Restablecer Todo el Catálogo a 'Sin Auditar'", key="btn_bulk_reset_all"):
+                    cursor.execute("UPDATE piezas SET estatus_auditoria = 'Sin Auditar', fecha_auditoria = NULL, auditor_nombre = NULL")
+                    conn.commit()
+                    st.warning("Se restablecieron todas las piezas a 'Sin Auditar'.")
+                    import time
+                    time.sleep(1)
+                    st.rerun()
+
+        st.markdown("---")
+
+        # 2. Filtros de Búsqueda y Selección
+        fcol_stat, fcol_search = st.columns([1, 2])
+        with fcol_stat:
+            status_filter = st.selectbox(
+                "Filtrar Catálogo:",
+                [f"🔴 Sin Auditar ({cnt_sin_auditar})", f"🟢 Auditadas ({cnt_auditadas})", f"📋 Todas ({cnt_total})"],
+                key="audit_status_filter"
+            )
+        with fcol_search:
+            audit_search = st.text_input(
+                "🔎 Buscar por Consecutivo ING, No. Pieza o SKU:",
+                placeholder="Ej: ING0010 ó 12-A-6199 ó PP21340",
+                key="audit_search_input"
+            )
+
+        # Construir consulta dinámica
+        where_clauses = []
+        params = []
+        if "🔴 Sin Auditar" in status_filter:
+            where_clauses.append("(estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL)")
+        elif "🟢 Auditadas" in status_filter:
+            where_clauses.append("estatus_auditoria = 'Auditada'")
+
+        if audit_search.strip():
+            where_clauses.append("(consecutivo_ing LIKE ? OR numero_pieza LIKE ? OR nombre_sku LIKE ?)")
+            q_like = f"%{audit_search.strip()}%"
+            params.extend([q_like, q_like, q_like])
+
+        query = "SELECT * FROM piezas"
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+        query += " ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku"
+
+        cursor.execute(query, tuple(params))
+        audit_rows = [dict(r) for r in cursor.fetchall()]
+
+        if not audit_rows:
+            st.info("ℹ️ No se encontraron piezas que coincidan con los filtros seleccionados.")
+        else:
+            def audit_label(p):
+                ing = p.get("consecutivo_ing") or "S/C"
+                status_icon = "🟢" if p.get("estatus_auditoria") == "Auditada" else "🔴"
+                return f"{status_icon} [{ing}] {p['nombre_sku']}"
+
+            audit_map = {audit_label(p): p for p in audit_rows}
+            selected_audit_label = st.selectbox(
+                f"Seleccione la Pieza a Auditar ({len(audit_rows)} mostradas):",
+                list(audit_map.keys()),
+                key="audit_selected_piece_box"
+            )
+            p_sel = audit_map[selected_audit_label]
+
+            # Ficha de la pieza
+            st.markdown(f"""
+            <div style="background:#F8F9FA; border:1px solid #D2D3D5; border-radius:8px; padding:1.2rem; margin:1rem 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+                    <span style="font-family:'Montserrat',sans-serif; font-size:1.3rem; font-weight:800; color:#111111;">
+                        [{p_sel.get('consecutivo_ing') or 'S/C'}] {p_sel['nombre_sku']}
+                    </span>
+                    <span style="background:{'#16a34a' if p_sel.get('estatus_auditoria')=='Auditada' else '#dc2626'}; color:#fff; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:0.85rem;">
+                        {p_sel.get('estatus_auditoria', 'Sin Auditar')}
+                    </span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; font-size:0.9rem; color:#4B5563;">
+                    <span>📌 <b>No. Pieza:</b> {p_sel['numero_pieza']}</span>
+                    <span>🧱 <b>Material:</b> {p_sel['material']}</span>
+                    <span>📏 <b>Espesor:</b> {p_sel['espesor_materia_prima']:.4f} in</span>
+                    <span>📐 <b>Dimensiones:</b> {p_sel['largo_materia_prima']:.3f} x {p_sel['ancho_materia_prima']:.3f} in</span>
+                    <span>🎨 <b>Acabado:</b> {p_sel['acabado_estandar']}</span>
+                    <span>🔖 <b>Factor K:</b> {p_sel['factor_k']}</span>
+                    <span>📋 <b>Versión:</b> {p_sel['version']}-{p_sel['revision']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Checklist de Documentos Requeridos
+            st.markdown("##### 📋 Checklist de Documentación de Ingeniería")
+            from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
+
+            docs = [
+                ("Plano de Control SIGRAMA (PDF)", p_sel.get("archivo_plano_control"), "application/pdf"),
+                ("Plano Original del Cliente (PDF)", p_sel.get("archivo_dibujo_original"), "application/pdf"),
+                ("Archivo de Corte Láser (DXF)", p_sel.get("archivo_dxf"), "application/dxf"),
+                ("Modelo 3D de Intercambio (STEP)", p_sel.get("archivo_step"), "application/octet-stream"),
+                ("Modelo 3D SolidWorks (SLDPRT)", p_sel.get("archivo_plano_nativo_3d"), "application/octet-stream"),
+                ("Dibujo 2D SolidWorks (SLDDRW)", p_sel.get("archivo_dibujo_nativo_2d"), "application/octet-stream"),
+                ("Especificaciones de Tolerancias (Excel)", p_sel.get("archivo_excel_resumen"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                ("VoBo / Primera Pieza", p_sel.get("documento_primera_pieza"), "application/pdf"),
+            ]
+
+            doc_cols = st.columns(4)
+            for idx, (doc_name, doc_path, doc_mime) in enumerate(docs):
+                c = doc_cols[idx % 4]
+                with c:
+                    has_doc = False
+                    f_bytes = None
+                    if doc_path:
+                        f_bytes = get_file_bytes(doc_path)
+                        if f_bytes:
+                            has_doc = True
+                    
+                    if has_doc:
+                        st.markdown(f"**✅ {doc_name}**")
+                        clean_fn = os.path.basename(str(doc_path).replace('\\', '/').split('?')[0])
+                        st.download_button(
+                            label="📥 Descargar",
+                            data=f_bytes,
+                            file_name=clean_fn,
+                            mime=doc_mime,
+                            key=f"btn_dl_audit_{idx}_{p_sel['id']}",
+                            use_container_width=True
+                        )
+                    else:
+                        st.markdown(f"**❌ {doc_name}**")
+                        st.caption("No registrado")
+
+            st.markdown("---")
+
+            # Vista Previa del Plano de Control
+            st.markdown("##### 📄 Vista Previa del Plano de Control")
+            preview_pdf_path = p_sel.get("archivo_plano_control") or p_sel.get("archivo_dibujo_original")
+            preview_bytes = get_file_bytes(preview_pdf_path) if preview_pdf_path else None
+
+            if preview_bytes:
+                import base64
+                pdf_b64 = base64.b64encode(preview_bytes).decode("utf-8")
+                pdfjs_audit_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8">
+                  <style>
+                    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+                    body {{ background: #525659; overflow-y: auto; height: 420px; }}
+                    #pdf-wrapper {{ display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px; }}
+                    canvas {{ display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.5); max-width: 100%; }}
+                    #pdf-loading {{ color: #94a3b8; font-size: 14px; padding: 2rem; text-align: center; }}
+                  </style>
+                  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+                </head>
+                <body>
+                  <div id="pdf-wrapper"><div id="pdf-loading">⏳ Cargando plano de control...</div></div>
+                  <script>
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                    const raw = atob("{pdf_b64}");
+                    const uint8 = new Uint8Array(raw.length);
+                    for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+                    pdfjsLib.getDocument({{ data: uint8 }}).promise.then(pdf => {{
+                      document.getElementById('pdf-loading').remove();
+                      const renderPage = (num) => {{
+                        pdf.getPage(num).then(page => {{
+                          const vp0 = page.getViewport({{ scale: 1 }});
+                          const wrapper = document.getElementById('pdf-wrapper');
+                          const scale = (wrapper.clientWidth - 20) / vp0.width;
+                          const viewport = page.getViewport({{ scale }});
+                          const canvas = document.createElement('canvas');
+                          canvas.width = viewport.width; canvas.height = viewport.height;
+                          wrapper.appendChild(canvas);
+                          page.render({{ canvasContext: canvas.getContext('2d'), viewport }});
+                          if (num < pdf.numPages) renderPage(num + 1);
+                        }});
+                      }};
+                      renderPage(1);
+                    }});
+                  </script>
+                </body>
+                </html>
+                """
+                components.html(pdfjs_audit_html, height=440, scrolling=False)
+            else:
+                st.warning("⚠️ No se encontró el archivo PDF del plano para generar vista previa.")
+
+            st.markdown("---")
+
+            # Formulario de Dictamen del Administrador
+            st.markdown("##### ✍️ Dictamen y Aprobación del Administrador")
+            audit_notes = st.text_area(
+                "Notas u Observaciones de la Auditoría:",
+                value=p_sel.get("auditoria_notas") or "",
+                placeholder="Indique si el plano cumple tolerancias, especificaciones de corte y doblez, o motivos de rechazo.",
+                key=f"notes_audit_{p_sel['id']}"
+            )
+
+            col_act1, col_act2, col_act3 = st.columns([2, 1, 1])
+            with col_act1:
+                btn_approve = st.button(
+                    "✅ Auditar y Aprobar Pieza (Habilitar en Visor 3D CAD)",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"btn_approve_audit_{p_sel['id']}"
+                )
+            with col_act2:
+                btn_reject = st.button(
+                    "⚠️ Rechazar / Observaciones",
+                    use_container_width=True,
+                    key=f"btn_reject_audit_{p_sel['id']}"
+                )
+            with col_act3:
+                btn_reset = st.button(
+                    "🔄 Marcar 'Sin Auditar'",
+                    use_container_width=True,
+                    key=f"btn_reset_audit_{p_sel['id']}"
+                )
+
+            if btn_approve:
+                admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
+                cursor.execute("""
+                    UPDATE piezas SET
+                        estatus_auditoria = 'Auditada',
+                        fecha_auditoria = CURRENT_TIMESTAMP,
+                        auditor_nombre = ?,
+                        auditoria_notas = ?
+                    WHERE id = ?
+                """, (admin_name, audit_notes, p_sel["id"]))
+                conn.commit()
+                st.success(f"🎉 ¡Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' auditada y aprobada con éxito! Ahora está disponible en el 3.1. Visualizador 3D CAD.")
+                import time
+                time.sleep(1)
+                st.rerun()
+
+            elif btn_reject:
+                admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
+                cursor.execute("""
+                    UPDATE piezas SET
+                        estatus_auditoria = 'Rechazada',
+                        fecha_auditoria = CURRENT_TIMESTAMP,
+                        auditor_nombre = ?,
+                        auditoria_notas = ?
+                    WHERE id = ?
+                """, (admin_name, audit_notes, p_sel["id"]))
+                conn.commit()
+                st.warning(f"⚠️ Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' marcada como Rechazada con observaciones.")
+                import time
+                time.sleep(1)
+                st.rerun()
+
+            elif btn_reset:
+                cursor.execute("""
+                    UPDATE piezas SET
+                        estatus_auditoria = 'Sin Auditar',
+                        fecha_auditoria = NULL,
+                        auditor_nombre = NULL
+                    WHERE id = ?
+                """, (p_sel["id"],))
+                conn.commit()
+                st.info(f"Pieza restablecida a 'Sin Auditar'.")
+                import time
+                time.sleep(1)
+                st.rerun()
+
     with tab1:
         st.markdown("#### Registro de Nueva Pieza")
         
