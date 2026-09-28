@@ -973,7 +973,7 @@ def show_cad_viewer():
                         const reader = response.body.getReader();
                         const chunks = [];
                         function pump() {{
-                            return reader.read().then({{ value, done }}) => {{
+                            return reader.read().then(({{ value, done }}) => {{
                                 if (done) {{
                                     if (progBar) progBar.style.width = '80%';
                                     if (progLabel) progLabel.textContent = 'Iniciando motor WASM...';
