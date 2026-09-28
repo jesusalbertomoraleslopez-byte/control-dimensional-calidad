@@ -57,11 +57,27 @@ def show_engineering_reports():
             st.markdown("#### Descarga de Planos y Archivos Nativos 3D/2D")
             st.markdown("A continuación se enlistan los archivos de diseño asociados a esta pieza. Los botones se habilitarán automáticamente si el archivo físico está presente en el servidor.")
             
-            # Helper to check file and render download button
+            # Helper to check file and render download button safely (local or GCS)
             def render_download_btn(label, file_path, file_name, mime_type, key):
-                if file_path and os.path.exists(file_path):
-                    with open(file_path, "rb") as f:
-                        file_bytes = f.read()
+                if not isinstance(file_path, str) or not file_path.strip() or file_path.strip().lower() in ("nan", "none"):
+                    st.button(f"🚫 {label.replace('📥 ', '')} (No Cargado)", disabled=True, use_container_width=True, key=f"disabled_{key}")
+                    return
+
+                file_bytes = None
+                try:
+                    from src.services.gcs_storage import get_file_bytes
+                    file_bytes = get_file_bytes(file_path)
+                except Exception:
+                    file_bytes = None
+
+                if not file_bytes and os.path.exists(file_path):
+                    try:
+                        with open(file_path, "rb") as f:
+                            file_bytes = f.read()
+                    except Exception:
+                        file_bytes = None
+
+                if file_bytes:
                     st.download_button(
                         label=label,
                         data=file_bytes,

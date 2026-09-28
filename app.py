@@ -355,7 +355,7 @@ if not st.session_state["logged_in"]:
                 else:
                     st.error("Usuario o contraseña incorrectos.")
                     
-        st.info("Credenciales de prueba:\n\n- Operador: `operador` / `operador123`\n- Administrador: `admin` / `admin123`")
+        pass
 else:
     # App Shell with Header Banner
     show_banner()
