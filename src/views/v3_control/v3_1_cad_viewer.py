@@ -481,12 +481,16 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         
         # Check if physical step/stl file was uploaded and exists (local or GCS)
         from src.services.gcs_storage import get_file_bytes
-        step_path = selected_piece.get("archivo_step")
+        raw_step = selected_piece.get("archivo_step")
+        if raw_step and isinstance(raw_step, (str, os.PathLike)) and str(raw_step).strip().lower() not in ("none", "nan", "null"):
+            step_path = str(raw_step).strip()
+        else:
+            step_path = None
 
         # Cache file bytes in session_state keyed by step_path to avoid
         # re-downloading from GCS on every Streamlit rerender
-        cache_key = f"_step_bytes_{step_path}"
         if step_path:
+            cache_key = f"_step_bytes_{step_path}"
             if cache_key not in st.session_state or st.session_state.get("_step_cache_key") != step_path:
                 with st.spinner("⏳ Descargando modelo 3D desde la nube..."):
                     file_bytes = get_file_bytes(step_path)

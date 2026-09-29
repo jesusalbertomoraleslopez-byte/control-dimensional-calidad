@@ -23,11 +23,17 @@ def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: boo
     tag = "INGENIERIA_COMPLETO" if is_full_engineering_pack else "COMPENDIO_DOCUMENTAL"
     zip_filename = f"{num_pieza}_{tag}.zip"
 
+    def _clean_p(val):
+        if val is None or pd.isna(val) or not isinstance(val, (str, os.PathLike)):
+            return None
+        s = str(val).strip()
+        return s if s and s.lower() not in ("none", "nan", "null") else None
+
     zip_buffer = io.BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         # 1. Plano de Control
-        plano_path = piece_data.get("archivo_plano_control")
+        plano_path = _clean_p(piece_data.get("archivo_plano_control"))
         if plano_path:
             b = get_file_bytes(plano_path)
             if b:
@@ -38,7 +44,7 @@ def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: boo
                 logs.append(f"No se pudieron leer los bytes del Plano de Control: {plano_path}")
 
         # 2. Dibujo Original
-        orig_path = piece_data.get("archivo_dibujo_original")
+        orig_path = _clean_p(piece_data.get("archivo_dibujo_original"))
         if orig_path and orig_path != plano_path:
             b = get_file_bytes(orig_path)
             if b:
@@ -47,7 +53,7 @@ def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: boo
                 logs.append("Dibujo Original incluido.")
 
         # 3. Archivo DXF
-        dxf_path = piece_data.get("archivo_dxf")
+        dxf_path = _clean_p(piece_data.get("archivo_dxf"))
         if dxf_path:
             b = get_file_bytes(dxf_path)
             if b:
@@ -56,7 +62,7 @@ def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: boo
                 logs.append("Archivo DXF de Corte incluido.")
 
         # 4. Modelo 3D STEP
-        step_path = piece_data.get("archivo_step")
+        step_path = _clean_p(piece_data.get("archivo_step"))
         if step_path:
             b = get_file_bytes(step_path)
             if b:
@@ -65,7 +71,7 @@ def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: boo
                 logs.append("Modelo 3D STEP incluido.")
 
         # 5. Archivo Excel Resumen
-        excel_path = piece_data.get("archivo_excel_resumen")
+        excel_path = _clean_p(piece_data.get("archivo_excel_resumen"))
         if excel_path:
             b = get_file_bytes(excel_path)
             if b:

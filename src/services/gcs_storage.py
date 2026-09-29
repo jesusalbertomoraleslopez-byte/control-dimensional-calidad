@@ -11,7 +11,7 @@ import os
 import io
 import mimetypes
 from datetime import timedelta
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Any
 
 # Nombre oficial del bucket configurado en Google Cloud
 DEFAULT_BUCKET_NAME = "sigrama-planos-calidad-2026"
@@ -107,15 +107,18 @@ def is_gcs_available() -> bool:
     except Exception:
         return False
 
-def normalize_blob_name(path_or_uri: str) -> str:
+def normalize_blob_name(path_or_uri: Any) -> str:
     """
     Convierte una ruta absoluta de Windows/Linux o una URI gs:// a un nombre relativo de Blob en GCS.
     Ejemplo: 'C:\\...\\src\\Proyectos\\11-B\\plano.pdf' -> 'Proyectos/11-B/plano.pdf'
     """
-    if not path_or_uri:
+    if not path_or_uri or not isinstance(path_or_uri, (str, os.PathLike)):
         return ""
 
     clean = str(path_or_uri).strip()
+    if not clean or clean.lower() in ("none", "nan", "null"):
+        return ""
+
     if clean.startswith("gs://"):
         parts = clean[5:].split("/", 1)
         if len(parts) > 1:
@@ -170,29 +173,36 @@ def upload_file_to_gcs(
     except Exception as e:
         return False, f"Error al subir a GCS: {str(e)}"
 
-def get_file_bytes(path_or_uri: Optional[str]) -> Optional[bytes]:
+def get_file_bytes(path_or_uri: Any) -> Optional[bytes]:
     """
     Obtiene los bytes de un archivo de manera transparente:
     1. Si existe localmente en disco, lo lee del disco.
     2. Si es una URI gs:// o no existe en disco local, intenta descargarlo de GCS.
     """
-    if not path_or_uri:
+    if not path_or_uri or not isinstance(path_or_uri, (str, os.PathLike)):
+        return None
+
+    path_str = str(path_or_uri).strip()
+    if not path_str or path_str.lower() in ("none", "nan", "null"):
         return None
 
     # 1. Intentar lectura local
-    if os.path.isabs(path_or_uri) and os.path.exists(path_or_uri):
-        try:
-            with open(path_or_uri, "rb") as f:
+    try:
+        if os.path.isabs(path_str) and os.path.exists(path_str):
+            with open(path_str, "rb") as f:
                 return f.read()
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     # 2. Intentar lectura desde GCS
     bucket = get_bucket()
     if bucket is None:
         return None
 
-    blob_name = normalize_blob_name(path_or_uri)
+    blob_name = normalize_blob_name(path_str)
+    if not blob_name:
+        return None
+
     try:
         blob = bucket.blob(blob_name)
         if blob.exists():
@@ -203,18 +213,28 @@ def get_file_bytes(path_or_uri: Optional[str]) -> Optional[bytes]:
     return None
 
 def generate_secure_signed_url(
-    path_or_uri: str,
+    path_or_uri: Any,
     expiration_minutes: int = 15
 ) -> Optional[str]:
     """
     Genera una URL firmada V4 con expiración temporal para acceso seguro y restringido.
     Solo funciona si la cuenta de servicio cuenta con su llave privada.
     """
+    if not path_or_uri or not isinstance(path_or_uri, (str, os.PathLike)):
+        return None
+
+    path_str = str(path_or_uri).strip()
+    if not path_str or path_str.lower() in ("none", "nan", "null"):
+        return None
+
     bucket = get_bucket()
     if bucket is None:
         return None
 
-    blob_name = normalize_blob_name(path_or_uri)
+    blob_name = normalize_blob_name(path_str)
+    if not blob_name:
+        return None
+
     try:
         blob = bucket.blob(blob_name)
         url = blob.generate_signed_url(
@@ -227,13 +247,23 @@ def generate_secure_signed_url(
         print(f"[GCS WARNING] No se pudo generar URL firmada para {blob_name}: {e}")
         return None
 
-def delete_gcs_file(path_or_uri: str) -> bool:
+def delete_gcs_file(path_or_uri: Any) -> bool:
     """Elimina un objeto de GCS"""
+    if not path_or_uri or not isinstance(path_or_uri, (str, os.PathLike)):
+        return False
+
+    path_str = str(path_or_uri).strip()
+    if not path_str or path_str.lower() in ("none", "nan", "null"):
+        return False
+
     bucket = get_bucket()
     if bucket is None:
         return False
 
-    blob_name = normalize_blob_name(path_or_uri)
+    blob_name = normalize_blob_name(path_str)
+    if not blob_name:
+        return False
+
     try:
         blob = bucket.blob(blob_name)
         if blob.exists():
