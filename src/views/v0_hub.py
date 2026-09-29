@@ -5,13 +5,114 @@ import os
 import io
 from src.database import get_connection
 import src.views.v3_control.v3_1_cad_viewer as cad_view
-try:
-    from src.nesting_packager import generate_piece_documents_zip
-except (ImportError, AttributeError):
-    import importlib
-    import src.nesting_packager
-    importlib.reload(src.nesting_packager)
-    from src.nesting_packager import generate_piece_documents_zip
+import zipfile
+
+def generate_piece_documents_zip(piece_data: dict, is_full_engineering_pack: bool = False) -> tuple[bytes, str, list[str]]:
+    """
+    Genera un paquete ZIP descargable con toda la documentación oficial de una pieza:
+    - Plano de Control (PDF)
+    - Dibujo Técnico Original (PDF)
+    - Archivo de Corte DXF
+    - Modelo 3D STEP
+    - Archivo Excel Resumen de Medidas
+    - Ficha Técnica Oficial PDF autogenerada
+    """
+    logs = []
+    num_pieza = str(piece_data.get("numero_pieza") or "PIEZA").strip().replace("/", "_").replace("\\", "_")
+    sku = str(piece_data.get("nombre_sku") or num_pieza).strip().replace("/", "_").replace("\\", "_")
+    tag = "INGENIERIA_COMPLETO" if is_full_engineering_pack else "COMPENDIO_DOCUMENTAL"
+    zip_filename = f"{num_pieza}_{tag}.zip"
+
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # 1. Plano de Control
+        plano_path = piece_data.get("archivo_plano_control")
+        if plano_path:
+            b = get_file_bytes(plano_path)
+            if b:
+                ext = os.path.splitext(plano_path)[1] or ".pdf"
+                zf.writestr(f"01_Planos/{num_pieza}_PLANO_CONTROL{ext}", b)
+                logs.append("Plano de Control incluido con éxito.")
+            else:
+                logs.append(f"No se pudieron leer los bytes del Plano de Control: {plano_path}")
+
+        # 2. Dibujo Original
+        orig_path = piece_data.get("archivo_dibujo_original")
+        if orig_path and orig_path != plano_path:
+            b = get_file_bytes(orig_path)
+            if b:
+                ext = os.path.splitext(orig_path)[1] or ".pdf"
+                zf.writestr(f"01_Planos/{num_pieza}_DIBUJO_ORIGINAL{ext}", b)
+                logs.append("Dibujo Original incluido.")
+
+        # 3. Archivo DXF
+        dxf_path = piece_data.get("archivo_dxf")
+        if dxf_path:
+            b = get_file_bytes(dxf_path)
+            if b:
+                ext = os.path.splitext(dxf_path)[1] or ".dxf"
+                zf.writestr(f"02_Manufactura_CNC/{num_pieza}_CORTE_LASER{ext}", b)
+                logs.append("Archivo DXF de Corte incluido.")
+
+        # 4. Modelo 3D STEP
+        step_path = piece_data.get("archivo_step")
+        if step_path:
+            b = get_file_bytes(step_path)
+            if b:
+                ext = os.path.splitext(step_path)[1] or ".step"
+                zf.writestr(f"03_Modelos_3D/{num_pieza}_CAD{ext}", b)
+                logs.append("Modelo 3D STEP incluido.")
+
+        # 5. Archivo Excel Resumen
+        excel_path = piece_data.get("archivo_excel_resumen")
+        if excel_path:
+            b = get_file_bytes(excel_path)
+            if b:
+                ext = os.path.splitext(excel_path)[1] or ".xlsx"
+                zf.writestr(f"04_Especificaciones/{num_pieza}_RESUMEN{ext}", b)
+                logs.append("Excel de Resumen incluido.")
+
+        # 6. Ficha Técnica Oficial PDF autogenerada
+        try:
+            pdf_data = dict(piece_data)
+            if not pdf_data.get("usuario_registro"):
+                pdf_data["usuario_registro"] = "Ingeniería SIGRAMA"
+            pdf_ficha = generate_first_piece_pdf(pdf_data)
+            if pdf_ficha:
+                zf.writestr(f"00_Ficha_Tecnica/{num_pieza}_FICHA_TECNICA.pdf", pdf_ficha)
+                logs.append("Ficha Técnica Oficial PDF generada e integrada.")
+        except Exception as e:
+            logs.append(f"Aviso al generar ficha técnica PDF: {str(e)}")
+
+        # 7. Manifiesto / README del paquete
+        manifest_txt = f"""======================================================================
+SIGRAMA METALES — PAQUETE TÉCNICO OFICIAL DE INGENIERÍA Y CALIDAD
+======================================================================
+Número de Pieza:  {piece_data.get('numero_pieza', 'N/D')}
+Código SKU:       {piece_data.get('nombre_sku', 'N/D')}
+Material:         {piece_data.get('material', 'N/D')}
+Espesor Nominal:  {piece_data.get('espesor_materia_prima', 'N/D')} in
+Acabado:          {piece_data.get('acabado_estandar', 'N/D')}
+Factor K:         {piece_data.get('factor_k', 'N/D')}%
+Versión / Rev:    {piece_data.get('version', 'V1')}-{piece_data.get('revision', 'R0')}
+Fecha de Paquete: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
+======================================================================
+Archivos contenidos:
+- 00_Ficha_Tecnica: Hoja de especificaciones de ingeniería y calibración.
+- 01_Planos: Plano de control acotado y/o dibujo original de cliente.
+- 02_Manufactura_CNC: Geometría plana desplegada para corte por láser (DXF).
+- 03_Modelos_3D: Archivo tridimensional estándar (STEP).
+- 04_Especificaciones: Tablas y resúmenes dimensionales complementarios.
+======================================================================
+Industria Sigrama S.A. de C.V. — Ingeniería que da resultados!!
+"""
+        zf.writestr(f"LEEME_{num_pieza}.txt", manifest_txt)
+
+    zip_bytes = zip_buffer.getvalue()
+    zip_buffer.close()
+    return zip_bytes, zip_filename, logs
+
 from src.pdf_generator import generate_first_piece_pdf
 from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
 
