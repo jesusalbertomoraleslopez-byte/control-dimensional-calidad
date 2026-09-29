@@ -272,6 +272,20 @@ def show_hub():
         margin-top: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
+
+    /* Buscador de piezas */
+    .hub-search-label {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: #0F172A;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -302,28 +316,57 @@ def show_hub():
 
     total_piezas = len(df_piezas)
 
-    # Manejar índice de pieza seleccionada
-    if "hub_piece_idx" not in st.session_state:
-        st.session_state["hub_piece_idx"] = 0
-
-    # Si venimos redirigidos con un target_piece_id o hub_selected_sku
+    # Manejar redirecciones directas desde otros módulos
     if "hub_selected_sku" in st.session_state:
         target_sku = st.session_state.pop("hub_selected_sku")
         matched = df_piezas[df_piezas["nombre_sku"] == target_sku]
         if not matched.empty:
-            st.session_state["hub_piece_idx"] = int(matched.index[0])
+            st.session_state["hub_current_piece_id"] = int(matched.iloc[0]["id"])
 
     if "hub_selected_piece_id" in st.session_state:
         target_id = st.session_state.pop("hub_selected_piece_id")
         matched = df_piezas[df_piezas["id"] == target_id]
         if not matched.empty:
-            st.session_state["hub_piece_idx"] = int(matched.index[0])
+            st.session_state["hub_current_piece_id"] = int(matched.iloc[0]["id"])
 
-    # Asegurar límites del índice
-    idx = max(0, min(st.session_state["hub_piece_idx"], total_piezas - 1))
-    st.session_state["hub_piece_idx"] = idx
+    # Inicializar ID de pieza seleccionada si aún no existe
+    if "hub_current_piece_id" not in st.session_state:
+        prev_idx = st.session_state.get("hub_piece_idx", 0)
+        prev_idx = max(0, min(prev_idx, total_piezas - 1))
+        st.session_state["hub_current_piece_id"] = int(df_piezas.iloc[prev_idx]["id"])
 
-    selected_piece = df_piezas.iloc[idx].to_dict()
+    # Filtrar según texto de búsqueda escrito por el usuario
+    search_query_val = (st.session_state.get("hub_piece_search_query") or "").strip().lower()
+    df_filtered = pd.DataFrame()
+    if search_query_val:
+        df_filtered = df_piezas[
+            df_piezas["numero_pieza"].astype(str).str.lower().str.contains(search_query_val, na=False) |
+            df_piezas["nombre_sku"].astype(str).str.lower().str.contains(search_query_val, na=False) |
+            df_piezas["consecutivo_ing"].astype(str).str.lower().str.contains(search_query_val, na=False) |
+            df_piezas["material"].astype(str).str.lower().str.contains(search_query_val, na=False)
+        ].reset_index(drop=True)
+        if not df_filtered.empty:
+            df_display = df_filtered
+        else:
+            df_display = df_piezas
+    else:
+        df_display = df_piezas
+
+    # Localizar pieza actual dentro del conjunto en visualización
+    curr_id = st.session_state.get("hub_current_piece_id")
+    match_display = df_display[df_display["id"] == curr_id]
+    if not match_display.empty:
+        display_idx = int(match_display.index[0])
+    else:
+        display_idx = 0
+        st.session_state["hub_current_piece_id"] = int(df_display.iloc[0]["id"])
+
+    selected_piece = df_display.iloc[display_idx].to_dict()
+    # Sincronizar índice global para compatibilidad
+    full_idx_match = df_piezas[df_piezas["id"] == selected_piece["id"]]
+    if not full_idx_match.empty:
+        st.session_state["hub_piece_idx"] = int(full_idx_match.index[0])
+
     num_pieza = selected_piece.get("numero_pieza") or "S/N"
     sku = selected_piece.get("nombre_sku") or num_pieza
     mat = selected_piece.get("material") or "Acero"
@@ -339,32 +382,58 @@ def show_hub():
     # COLUMNA 1: PIEZA Y VISOR 3D CAD
     # ══════════════════════════════════════════════════════════════════
     with col_left:
-        # Selector rápido y navegación Prev/Next
+        # 1. Campo de texto para escribir y buscar la pieza directamente
+        st.markdown('<div class="hub-search-label">🔍 ESCRIBIR / BUSCAR PIEZA O SKU:</div>', unsafe_allow_html=True)
+        c_search, c_clear = st.columns([3.8, 1.2])
+        with c_search:
+            st.text_input(
+                "Escribir o buscar pieza:",
+                placeholder="Escribe ej. 11-B-9016, 6004, K30...",
+                key="hub_piece_search_query",
+                label_visibility="collapsed"
+            )
+        with c_clear:
+            def _clear_search():
+                st.session_state["hub_piece_search_query"] = ""
+            st.button("Limpiar", key="hub_btn_clear_search", on_click=_clear_search, use_container_width=True, help="Borrar búsqueda y mostrar todas")
+
+        if search_query_val and df_filtered.empty:
+            st.warning(f"⚠️ No se encontró ninguna pieza con '{search_query_val}'. Mostrando catálogo completo.")
+
+        # 2. Selector rápido y navegación Prev/Next
         p_c1, p_c2, p_c3 = st.columns([1, 2.5, 1])
         with p_c1:
-            if st.button("◀ Ant.", key="hub_btn_prev", use_container_width=True, help="Pieza previa", disabled=(idx <= 0)):
-                st.session_state["hub_piece_idx"] = idx - 1
+            if st.button("◀ Ant.", key="hub_btn_prev", use_container_width=True, help="Pieza previa", disabled=(display_idx <= 0)):
+                new_piece_id = int(df_display.iloc[display_idx - 1]["id"])
+                st.session_state["hub_current_piece_id"] = new_piece_id
                 st.rerun()
         with p_c2:
             piezas_options = [
                 f"{r['numero_pieza']} ({r.get('consecutivo_ing') or f'ID-{r['id']}'})"
-                for _, r in df_piezas.iterrows()
+                for _, r in df_display.iterrows()
             ]
             selected_option = st.selectbox(
                 "Seleccionar Pieza:",
                 options=piezas_options,
-                index=idx,
+                index=display_idx,
                 key="hub_selectbox_piece",
                 label_visibility="collapsed"
             )
-            new_idx = piezas_options.index(selected_option)
-            if new_idx != idx:
-                st.session_state["hub_piece_idx"] = new_idx
+            selected_idx = piezas_options.index(selected_option)
+            if selected_idx != display_idx:
+                st.session_state["hub_current_piece_id"] = int(df_display.iloc[selected_idx]["id"])
                 st.rerun()
         with p_c3:
-            if st.button("Sig. ▶", key="hub_btn_next", use_container_width=True, help="Siguiente pieza", disabled=(idx >= total_piezas - 1)):
-                st.session_state["hub_piece_idx"] = idx + 1
+            if st.button("Sig. ▶", key="hub_btn_next", use_container_width=True, help="Siguiente pieza", disabled=(display_idx >= len(df_display) - 1)):
+                new_piece_id = int(df_display.iloc[display_idx + 1]["id"])
+                st.session_state["hub_current_piece_id"] = new_piece_id
                 st.rerun()
+
+        # Contador de piezas
+        if search_query_val and not df_filtered.empty:
+            st.caption(f"🔍 Mostrando **{display_idx + 1} de {len(df_display)}** piezas encontradas (Total catálogo: {total_piezas})")
+        else:
+            st.caption(f"📦 Pieza **{display_idx + 1} de {total_piezas}** en catálogo")
 
         # Cuadro de Número de Pieza (según diagrama del usuario: 11-B-9016-01)
         st.markdown(f"""
