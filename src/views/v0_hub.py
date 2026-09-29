@@ -124,7 +124,6 @@ def render_header_back_to_hub(current_section=""):
     col_back, col_space = st.columns([1.5, 5])
     with col_back:
         if st.button("🔙 Volver a Página Principal", key=f"btn_global_hub_back_{current_section}", use_container_width=True):
-            st.session_state["nav_menu_selection"] = "1. Página Principal (Centro de Control)"
             st.session_state["redirect_to_page"] = "1. Página Principal (Centro de Control)"
             st.rerun()
 
@@ -405,7 +404,6 @@ def show_hub():
 
             # Botón 1: PPVA (Proceso de Aprobación de Producción / Auditoría de Planos)
             if st.button("PPVA", key="hub_btn_ppva", use_container_width=True, help="Proceso de Aprobación de Partes de Producción / Auditoría y Validación de Planos"):
-                st.session_state["nav_menu_selection"] = "   3.1 Carga de Registros de Diseño"
                 st.session_state["redirect_to_page"] = "   3.1 Carga de Registros de Diseño"
                 st.session_state["hub_selected_piece_id"] = selected_piece["id"]
                 st.session_state["design_target_tab"] = 0 # Tab 3.2.1 Auditoría
@@ -413,7 +411,6 @@ def show_hub():
 
             # Botón 2: PRIMERAS PIEZAS
             if st.button("PRIMERAS PIEZAS", key="hub_btn_primeras_piezas", use_container_width=True, help="Inspección y Validación de Primera Pieza"):
-                st.session_state["nav_menu_selection"] = "   3.1 Carga de Registros de Diseño"
                 st.session_state["redirect_to_page"] = "   3.1 Carga de Registros de Diseño"
                 st.session_state["hub_selected_piece_id"] = selected_piece["id"]
                 st.session_state["design_target_tab"] = 2 # Tab 3.2.3 Primera Pieza
@@ -421,7 +418,6 @@ def show_hub():
 
             # Botón 3: MEDICIONES DE ÓRDENES DE FABRICACIÓN
             if st.button("MEDICIONES DE ÓRDENES DE FABRICACIÓN", key="hub_btn_mediciones", use_container_width=True, help="Carga de Inspección Dimensional en Piso (Corte Láser y Doblez)"):
-                st.session_state["nav_menu_selection"] = "   4.2 Carga de Inspección (Excel)"
                 st.session_state["redirect_to_page"] = "   4.2 Carga de Inspección (Excel)"
                 st.session_state["hub_selected_sku"] = selected_piece["nombre_sku"]
                 st.rerun()
