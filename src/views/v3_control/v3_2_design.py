@@ -41,6 +41,9 @@ def validate_step_file(step_path) -> bool:
         return False
 
 def show_design_loader():
+    from src.views.v0_hub import render_header_back_to_hub
+    render_header_back_to_hub("3.2_design")
+
     st.title("3.2. Carga de Registros de Diseño e Ingeniería")
     st.subheader("Generación Automática de SKU, Creación de Directorios y Carga de Archivos Requeridos")
     

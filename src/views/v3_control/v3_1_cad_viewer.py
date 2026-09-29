@@ -12,278 +12,400 @@ def detect_step_units(file_bytes) -> str:
     """
     return "mm"
 
-def show_cad_viewer():
-    st.title("3.1. Visualizador 3D CAD")
-    st.subheader("Visualización WebGL Interactiva de Archivos de Diseño")
+def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None, embed_mode=False, embed_piece=None, height=440):
+    if embed_mode:
+        selected_piece = embed_piece
+        registered_pieces = [embed_piece] if embed_piece else []
+        uploaded_step = None
+        label_to_piece = {}
+        filtered_labels = []
+        prev_disabled_attr = "disabled"
+        next_disabled_attr = "disabled"
+        prev_direct_url = ""
+        next_direct_url = ""
+        middle_text = ""
+        prev_disabled = True
+        next_disabled = True
+        prev_target = None
+        next_target = None
+    elif direct_fullscreen:
+        # Modo Pantalla Completa Directa: Ocultar Streamlit Shell por completo para experiencia CAD pura
+        st.markdown("""
+        <style>
+        [data-testid="stSidebar"], header[data-testid="stHeader"], footer, #MainMenu, [data-testid="stToolbar"], div[data-testid="stDecoration"] {
+            display: none !important;
+        }
+        .main, .main .block-container, section.main {
+            max-width: 100vw !important;
+            width: 100vw !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+        iframe {
+            width: 100vw !important;
+            height: 100vh !important;
+            border: none !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 9999 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    elif not embed_mode:
+        from src.views.v0_hub import render_header_back_to_hub
+        render_header_back_to_hub("3.1_cad_viewer")
 
-    # Direct DOM queries from the same-origin WebGL iframe are used for button click navigation.
+        st.title("3.1. Visualizador 3D CAD")
+        st.subheader("Visualización WebGL Interactiva de Archivos de Diseño")
 
-    # ── Scoped CSS: refined piece selector and column filter dropdowns ──
-    st.markdown("""
-    <style>
-    /* ══ ALL SELECTBOXES: corporate black container ══════════════════════════ */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
-        background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
-        border: 2px solid #EC2024 !important;
-        border-radius: 8px !important;
-        min-height: 52px !important; /* Reducido de 72px */
-    }
-    /* Nuclear selector: force every child element to white text */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-    }
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
-        fill: #ffffff !important;
-    }
-    
-    /* Centrar verticalmente y eliminar paddings que recortan el texto */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"],
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] input {
-        padding-top: 0px !important;
-        padding-bottom: 0px !important;
-        display: flex !important;
-        align-items: center !important;
-    }
-
-    /* ══ PIECE SELECTOR (not in column): large bold text ═══════════ */
-    div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-    div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
-        font-size: 1.8rem !important; /* Reducido un 30% de 2.6rem */
-        font-weight: 800 !important;
-        line-height: 1.2 !important;
-        text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
-    }
-
-    /* ══ COLUMN FILTER DROPDOWNS: standard size override ════════════════════ */
-    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
-        background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
-        border: 1px solid #EC2024 !important;
-        min-height: 38px !important;
-        border-radius: 6px !important;
-    }
-    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
-    div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
-        font-size: 0.92rem !important;
-        font-weight: 700 !important;
-        line-height: 1.2 !important;
-        text-shadow: none !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-
-    st.markdown("""
-        Esta sección permite cargar o seleccionar archivos de diseño (ej. `.STL` o `.STEP`) para su inspección visual tridimensional y medición de cotas generales.
-    """)
-
-    # 1. Database connection and querying (REGLA DE ORO: SOLO PIEZAS AUDITADAS Y APROBADAS)
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT * FROM piezas 
-        WHERE estatus_auditoria = 'Auditada' 
-        ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku
-    """)
-    registered_pieces = [dict(r) for r in cursor.fetchall()]
-
-    # Contar piezas pendientes de auditoría
-    cursor.execute("SELECT COUNT(*) FROM piezas WHERE estatus_auditoria != 'Auditada' OR estatus_auditoria IS NULL")
-    unaudited_count = cursor.fetchone()[0]
-    conn.close()
-
-    if len(registered_pieces) == 0:
-        st.markdown(f"""
-        <div style="background:#FFFBEB; border-left:6px solid #F59E0B; border-radius:8px; padding:1.3rem 1.5rem; margin-bottom:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-            <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem;">
-                <span style="font-size:1.4rem;">🛡️</span>
-                <span style="color:#B45309; font-weight:800; font-size:1.1rem; font-family:'Montserrat',sans-serif;">
-                    Proceso de Validación y Auditoría de Planos Requerido
-                </span>
-            </div>
-            <p style="color:#92400E; margin:0 0 0.8rem 0; font-size:0.95rem; font-family:'Questrial',sans-serif; line-height:1.5;">
-                Actualmente existen <b>{unaudited_count} piezas</b> en la base de datos oficial en estatus <b>'Sin Auditar'</b>. 
-                Por normativa estricta de Ingeniería y Calidad, ningún plano ni modelo 3D puede visualizarse en piso hasta que el <b>Administrador</b> haya auditado y aprobado que la pieza cuenta con toda su documentación completa (PDF de Control, DXF, Modelo 3D y Hoja de Especificaciones).
-            </p>
-            <div style="background:#FEF3C7; padding:0.6rem 1rem; border-radius:6px; font-size:0.9rem; color:#78350F; font-family:'Questrial',sans-serif;">
-                👉 <b>Acción Requerida:</b> Ingrese a la sección <b>3.2. Carga de Registros de Diseño e Ingeniería</b> (Pestaña <b>3.2.1. Auditoría y Validación de Planos</b>) para revisar los documentos y auditar las piezas.
-            </div>
-        </div>
+        # Scoped CSS: refined piece selector and column filter dropdowns
+        st.markdown("""
+        <style>
+        /* ══ ALL SELECTBOXES: corporate black container ══════════════════════════ */
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
+            background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
+            border: 2px solid #EC2024 !important;
+            border-radius: 8px !important;
+            min-height: 52px !important;
+        }
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] * {
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
+            fill: #ffffff !important;
+        }
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] input {
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+        div[data-testid="stVerticalBlock"] > div > div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
+            font-size: 1.8rem !important;
+            font-weight: 800 !important;
+            line-height: 1.2 !important;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4) !important;
+        }
+        div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] > div:first-child {
+            background: linear-gradient(135deg, #111111 0%, #2A2A2A 100%) !important;
+            border: 1px solid #EC2024 !important;
+            min-height: 38px !important;
+            border-radius: 6px !important;
+        }
+        div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] span,
+        div[data-testid="stColumn"] div[data-testid="stSelectbox"] div[data-baseweb="select"] [role="button"] {
+            font-size: 0.92rem !important;
+            font-weight: 700 !important;
+            line-height: 1.2 !important;
+            text-shadow: none !important;
+        }
+        </style>
         """, unsafe_allow_html=True)
 
+        st.markdown("""
+            Esta sección permite cargar o seleccionar archivos de diseño (ej. `.STL` o `.STEP`) para su inspección visual tridimensional y medición de cotas generales.
+        """)
 
-    # ── Filter Panel ────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="background:linear-gradient(135deg,#111111 0%,#2A2A2A 100%);
-                border-left:5px solid #EC2024;
-                border-radius:10px;padding:1rem 1.5rem 0.5rem 1.5rem;margin-bottom:1rem;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-      <span style="color:#fff;font-weight:800;font-size:1.1rem;letter-spacing:.5px;font-family:'Montserrat';">
-        🔍 Filtros de Búsqueda de Piezas
-      </span>
-    </div>
-    """, unsafe_allow_html=True)
+    if not embed_mode:
+        # 1. Database connection and querying
+        conn = get_connection()
+        cursor = conn.cursor()
+        if direct_fullscreen:
+            cursor.execute("""
+                SELECT * FROM piezas 
+                ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku
+            """)
+            registered_pieces = [dict(r) for r in cursor.fetchall()]
+            unaudited_count = 0
+        else:
+            cursor.execute("""
+                SELECT * FROM piezas 
+                WHERE estatus_auditoria = 'Auditada' 
+                ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku
+            """)
+            registered_pieces = [dict(r) for r in cursor.fetchall()]
 
-    # Derive unique values for each filter
-    all_numbers   = sorted(set(p["numero_pieza"]     for p in registered_pieces))
-    all_materials = sorted(set(p["material"]         for p in registered_pieces))
-    all_finishes  = sorted(set(p["acabado_estandar"] for p in registered_pieces))
-    all_versions  = sorted(set(p["version"]          for p in registered_pieces))
-    all_revisions = sorted(set(p["revision"]         for p in registered_pieces))
+            # Contar piezas pendientes de auditoría
+            cursor.execute("SELECT COUNT(*) FROM piezas WHERE estatus_auditoria != 'Auditada' OR estatus_auditoria IS NULL")
+            unaudited_count = cursor.fetchone()[0]
+        conn.close()
 
-    fcol1, fcol2, fcol3 = st.columns([2, 1, 1])
-    with fcol1:
-        filt_text = st.text_input(
-            "🔎 Buscar por Número de Pieza o SKU",
-            placeholder="Ej: 12-A-6004  ó  K48  ó  END_FILLER",
-            key="cad_filt_text"
-        )
-    with fcol2:
-        filt_material = st.selectbox(
-            "Material / Calibre",
-            ["Todos"] + all_materials,
-            key="cad_filt_material"
-        )
-    with fcol3:
-        filt_finish = st.selectbox(
-            "Acabado / Estándar",
-            ["Todos"] + all_finishes,
-            key="cad_filt_finish"
-        )
-
-    fcol4, fcol5, fcol6 = st.columns([1, 1, 2])
-    with fcol4:
-        filt_version = st.selectbox(
-            "Versión",
-            ["Todos"] + all_versions,
-            key="cad_filt_version"
-        )
-    with fcol5:
-        filt_revision = st.selectbox(
-            "Revisión",
-            ["Todos"] + all_revisions,
-            key="cad_filt_revision"
-        )
-    with fcol6:
-        filt_numero = st.selectbox(
-            "Número de Pieza (exacto)",
-            ["Todos"] + all_numbers,
-            key="cad_filt_numero"
-        )
-
-    # Apply all filters
-    filtered_pieces = registered_pieces
-    if filt_text.strip():
-        q = filt_text.strip().lower()
-        filtered_pieces = [p for p in filtered_pieces
-                           if q in p["nombre_sku"].lower()
-                           or q in p["numero_pieza"].lower()]
-    if filt_material != "Todos":
-        filtered_pieces = [p for p in filtered_pieces if p["material"] == filt_material]
-    if filt_finish != "Todos":
-        filtered_pieces = [p for p in filtered_pieces if p["acabado_estandar"] == filt_finish]
-    if filt_version != "Todos":
-        filtered_pieces = [p for p in filtered_pieces if p["version"] == filt_version]
-    if filt_revision != "Todos":
-        filtered_pieces = [p for p in filtered_pieces if p["revision"] == filt_revision]
-    if filt_numero != "Todos":
-        filtered_pieces = [p for p in filtered_pieces if p["numero_pieza"] == filt_numero]
-
-    # Match counter badge
-    n = len(filtered_pieces)
-    badge_color = "#16a34a" if n > 0 else "#dc2626"
-    st.markdown(
-        f'<div style="margin-bottom:.5rem;">'
-        f'<span style="background:{badge_color};color:#fff;font-weight:bold;'
-        f'font-size:.85rem;padding:3px 12px;border-radius:20px;">'
-        f'{"✅" if n>0 else "❌"} {n} pieza{"s" if n!=1 else ""} encontrada{"s" if n!=1 else ""}'
-        f'</span></div>',
-        unsafe_allow_html=True
-    )
-
-    # Dropdown with filtered results (mostrando el consecutivo ING oficial si existe)
-    def format_piece_label(p):
-        ing = p.get("consecutivo_ing")
-        return f"[{ing}] {p['nombre_sku']}" if ing else p["nombre_sku"]
-
-    label_to_piece = {format_piece_label(p): p for p in filtered_pieces}
-    piece_options = ["-- Cargar Archivo Manual --"] + list(label_to_piece.keys())
-    
-    # Ensure current selection in session state is valid for new options list
-    if "cad_piece_select" in st.session_state:
-        if st.session_state["cad_piece_select"] not in piece_options:
-            st.session_state["cad_piece_select"] = piece_options[0]
-
-    selected_option = st.selectbox(
-        "Seleccione la pieza a visualizar:",
-        piece_options,
-        key="cad_piece_select"
-    )
-
-    uploaded_step = None
-    selected_piece = None
-
-    if selected_option == "-- Cargar Archivo Manual --":
-        uploaded_step = st.file_uploader(
-            "Cargar archivo CAD 3D de la pieza (.STEP, .STL)",
-            type=["step", "stp", "stl"]
-        )
-    else:
-        selected_piece = label_to_piece.get(selected_option)
-        # Show piece info card
-        if selected_piece:
-            sku = selected_piece["nombre_sku"]
-            st.markdown(
-                f"""
-                <div style="display: flex; align-items: center; justify-content: space-between; 
-                            background-color: #F8F9FA; border: 1px solid #D2D3D5; border-radius: 6px; 
-                            padding: 0.5rem 1rem; margin-bottom: 0.8rem; font-family: 'Questrial', sans-serif;">
-                    <span style="font-family: 'Montserrat', sans-serif; font-weight: bold; font-size: 1.1rem; color: #111111;">
-                        {sku}
+        if not direct_fullscreen and len(registered_pieces) == 0:
+            st.markdown(f"""
+            <div style="background:#FFFBEB; border-left:6px solid #F59E0B; border-radius:8px; padding:1.3rem 1.5rem; margin-bottom:1.5rem; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem;">
+                    <span style="font-size:1.4rem;">🛡️</span>
+                    <span style="color:#B45309; font-weight:800; font-size:1.1rem; font-family:'Montserrat',sans-serif;">
+                        Proceso de Validación y Auditoría de Planos Requerido
                     </span>
-                    <button onclick="navigator.clipboard.writeText('{sku}').then(() => {{
-                        const btn = document.getElementById('copy-btn-cad');
-                        btn.innerHTML = '✅ Copiado!';
-                        btn.style.backgroundColor = '#16a34a';
-                        setTimeout(() => {{
-                            btn.innerHTML = '📋 Copiar SKU';
-                            btn.style.backgroundColor = '#EC2024';
-                        }}, 2000);
-                    }})" id="copy-btn-cad" style="
-                        background-color: #EC2024;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        padding: 6px 14px;
-                        font-weight: bold;
-                        font-family: 'Questrial', sans-serif;
-                        cursor: pointer;
-                        transition: all 0.2s ease;
-                    " onmouseover="this.style.backgroundColor='#111111'" onmouseout="if(this.innerHTML!=='✅ Copiado!') this.style.backgroundColor='#EC2024'">
-                        📋 Copiar SKU
-                    </button>
                 </div>
-                """,
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f"""<div style="background:#f0f9ff;border:1px solid #bae6fd;
-                    border-radius:8px;padding:.8rem 1.2rem;margin:.5rem 0;
-                    display:flex;flex-wrap:wrap;gap:1.5rem;font-size:.9rem;">
-                  <span>📌 <b>No. Pieza:</b> {selected_piece['numero_pieza']}</span>
-                  <span>🧱 <b>Material:</b> {selected_piece['material']}</span>
-                  <span>📏 <b>Espesor:</b> {selected_piece['espesor_materia_prima']:.4f} in</span>
-                  <span>📐 <b>Largo:</b> {selected_piece['largo_materia_prima']:.3f} in</span>
-                  <span>↔️ <b>Ancho:</b> {selected_piece['ancho_materia_prima']:.3f} in</span>
-                  <span>🎨 <b>Acabado:</b> {selected_piece['acabado_estandar']}</span>
-                  <span>🔖 <b>Factor K:</b> {selected_piece['factor_k']}</span>
-                  <span>📋 <b>Versión:</b> {selected_piece['version']}-{selected_piece['revision']}</span>
-                </div>""",
-                unsafe_allow_html=True
-            )
+                <p style="color:#92400E; margin:0 0 0.8rem 0; font-size:0.95rem; font-family:'Questrial',sans-serif; line-height:1.5;">
+                    Actualmente existen <b>{unaudited_count} piezas</b> en la base de datos oficial en estatus <b>'Sin Auditar'</b>. 
+                    Por normativa estricta de Ingeniería y Calidad, ningún plano ni modelo 3D puede visualizarse en piso hasta que el <b>Administrador</b> haya auditado y aprobado que la pieza cuenta con toda su documentación completa (PDF de Control, DXF, Modelo 3D y Hoja de Especificaciones).
+                </p>
+                <div style="background:#FEF3C7; padding:0.6rem 1rem; border-radius:6px; font-size:0.9rem; color:#78350F; font-family:'Questrial',sans-serif;">
+                    👉 <b>Acción Requerida:</b> Ingrese a la sección <b>3.2. Carga de Registros de Diseño e Ingeniería</b> (Pestaña <b>3.2.1. Auditoría y Validación de Planos</b>) para revisar los documentos y auditar las piezas.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown("#### 📐 Vista Interactiva 3D (WebGL)")
+
+        # ── Ultra-Clean Search Bar & Quick Version Selector ─────────────────────────
+        st.markdown("""
+        <style>
+        /* ── Campo de Búsqueda Amarillo de Alta Visibilidad (Tamaño Doble y Negrita) ── */
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) label,
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) label p {
+            font-size: 1.5rem !important;
+            font-weight: 900 !important;
+            color: #111111 !important;
+            font-family: 'Montserrat', sans-serif !important;
+            letter-spacing: 0.5px !important;
+            margin-bottom: 8px !important;
+        }
+        /* ── Contenedor BaseWeb para evitar recorte vertical ── */
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) div[data-baseweb="input"] {
+            background-color: #FFF176 !important; /* Amarillo Industrial */
+            border: 3px solid #111111 !important; /* Marco negro de alto contraste */
+            border-radius: 8px !important;
+            height: auto !important;
+            min-height: 64px !important;
+            padding: 4px 8px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) div[data-baseweb="input"]:focus-within {
+            background-color: #FFFF8D !important;
+            border-color: #EC2024 !important;
+            box-shadow: 0 0 16px rgba(236,32,36,0.45) !important;
+        }
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) input {
+            background-color: transparent !important;
+            color: #000000 !important;
+            font-size: 1.65rem !important; /* Tamaño doble */
+            font-weight: 900 !important; /* Negrita */
+            font-family: 'Montserrat', sans-serif !important;
+            border: none !important;
+            height: 52px !important;
+            line-height: 52px !important;
+            padding: 0 10px !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stTextInput"]:has(input[aria-label*="Buscar por Número de Pieza"]) input::placeholder {
+            color: #555555 !important;
+            font-size: 1.15rem !important;
+            font-weight: 600 !important;
+            line-height: 52px !important;
+        }
+
+        .btn-new-win-cad {
+            display: inline-block;
+            background: linear-gradient(135deg, #EC2024 0%, #B71C1C 100%);
+            color: #FFFFFF !important;
+            text-decoration: none !important;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 800;
+            padding: 10px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(236,32,36,0.35);
+            margin-top: 4px;
+            float: right;
+            transition: transform 0.1s ease;
+        }
+        .btn-new-win-cad:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(236,32,36,0.55);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        def format_piece_label(p):
+            ing = p.get("consecutivo_ing")
+            return f"[{ing}] {p['nombre_sku']}" if ing else p["nombre_sku"]
+
+        if direct_fullscreen:
+            t_sku = (target_sku or st.query_params.get("sku", "")).strip().lower()
+            t_pz = (target_pieza or st.query_params.get("pieza", "")).strip().lower()
+            selected_piece = None
+            if t_sku:
+                for p in registered_pieces:
+                    if p.get("nombre_sku", "").strip().lower() == t_sku or t_sku in p.get("nombre_sku", "").strip().lower():
+                        selected_piece = p
+                        break
+            if not selected_piece and t_pz:
+                for p in registered_pieces:
+                    if p.get("numero_pieza", "").strip().lower() == t_pz or p.get("numero_plano", "").strip().lower() == t_pz:
+                        selected_piece = p
+                        break
+            if not selected_piece and registered_pieces:
+                selected_piece = registered_pieces[0]
+            
+            uploaded_step = None
+            selected_option = format_piece_label(selected_piece) if selected_piece else None
+            label_to_piece = {format_piece_label(p): p for p in registered_pieces}
+        else:
+            # Clean search input
+            c_s1, c_s2 = st.columns([3, 1.2])
+            with c_s1:
+                filt_text = st.text_input(
+                    "🔎 Buscar por Número de Pieza o SKU",
+                    placeholder="Escriba el Número de Pieza (ej. 12-A-6004, P13704, PP9247...)",
+                    key="cad_filt_text"
+                )
+            with c_s2:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                # Match counter badge
+                n_total = len(registered_pieces)
+                st.markdown(
+                    f'<div style="text-align: right; padding-top: 5px;">'
+                    f'<span style="background:#16a34a;color:#fff;font-weight:bold;'
+                    f'font-size:.9rem;padding:6px 14px;border-radius:20px;">'
+                    f'✅ {n_total} Piezas Auditadas</span></div>',
+                    unsafe_allow_html=True
+                )
+
+            # Filter pieces based on text search
+            filtered_pieces = registered_pieces
+            if filt_text.strip():
+                q = filt_text.strip().lower()
+                filtered_pieces = [p for p in filtered_pieces
+                                   if q in p["nombre_sku"].lower()
+                                   or q in p["numero_pieza"].lower()
+                                   or q in str(p.get("consecutivo_ing", "")).lower()]
+
+            label_to_piece = {format_piece_label(p): p for p in filtered_pieces}
+            piece_options = ["-- Cargar Archivo Manual --"] + list(label_to_piece.keys())
+
+            # Preseleccionar por SKU o Pieza si viene en URL o target
+            t_sku = (target_sku or st.query_params.get("sku", "")).strip().lower()
+            t_pz = (target_pieza or st.query_params.get("pieza", "")).strip().lower()
+            if t_sku or t_pz:
+                for opt in piece_options:
+                    if opt == "-- Cargar Archivo Manual --": continue
+                    opt_l = opt.lower()
+                    if (t_sku and t_sku in opt_l) or (t_pz and t_pz in opt_l):
+                        st.session_state["cad_piece_select"] = opt
+                        break
+
+            if "cad_piece_select" in st.session_state:
+                if st.session_state["cad_piece_select"] not in piece_options:
+                    st.session_state["cad_piece_select"] = piece_options[1] if len(piece_options) > 1 else (piece_options[0] if len(piece_options) > 0 else None)
+
+            # Selector principal de pieza
+            col_sel_p, col_win_btn = st.columns([3, 1.2])
+            with col_sel_p:
+                selected_option = st.selectbox(
+                    "Seleccione la Pieza / Modelo CAD a Visualizar:",
+                    piece_options,
+                    key="cad_piece_select"
+                )
+
+            with col_win_btn:
+                st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if selected_option and selected_option != "-- Cargar Archivo Manual --":
+                    curr_p = label_to_piece.get(selected_option)
+                    if curr_p:
+                        sku_clean = curr_p['nombre_sku'].replace(' ', '%20')
+                        pz_clean = str(curr_p['numero_pieza']).replace(' ', '%20')
+                        st.markdown(f"""
+                        <a href="?fullscreen=cad&sku={sku_clean}&pieza={pz_clean}" target="_blank" class="btn-new-win-cad">
+                            🧊 Abrir Visor 3D (Pantalla Completa) ↗
+                        </a>
+                        """, unsafe_allow_html=True)
+
+            # Mostrar versiones existentes de esta misma pieza si existen
+            if selected_option and selected_option != "-- Cargar Archivo Manual --":
+                p_act = label_to_piece.get(selected_option)
+                if p_act:
+                    hermanas = [p for p in registered_pieces if p["numero_pieza"] == p_act["numero_pieza"]]
+                    if len(hermanas) > 1:
+                        st.markdown("<div style='font-size: 0.82rem; font-weight: 800; color: #555; margin: 4px 0;'>VERSIONES Y REVISIONES REGISTRADAS:</div>", unsafe_allow_html=True)
+                        v_cols = st.columns(min(len(hermanas), 6))
+                        for v_i, h_p in enumerate(hermanas):
+                            with v_cols[v_i % len(v_cols)]:
+                                h_lbl = f"{h_p.get('version','V1')}-{h_p.get('revision','R0')}"
+                                es_act = (h_p["id"] == p_act["id"])
+                                if st.button(
+                                    f"{'👉 ' if es_act else ''}{h_lbl}",
+                                    key=f"cad_v_btn_{h_p['id']}",
+                                    use_container_width=True,
+                                    type="primary" if es_act else "secondary"
+                                ):
+                                    st.session_state["cad_piece_select"] = format_piece_label(h_p)
+                                    st.rerun()
+
+            uploaded_step = None
+            selected_piece = None
+
+            if selected_option == "-- Cargar Archivo Manual --":
+                uploaded_step = st.file_uploader(
+                    "Cargar archivo CAD 3D de la pieza (.STEP, .STL)",
+                    type=["step", "stp", "stl"]
+                )
+            else:
+                selected_piece = label_to_piece.get(selected_option)
+                # Show piece info card
+                if selected_piece:
+                    sku = selected_piece["nombre_sku"]
+                    st.markdown(
+                        f"""
+                        <div style="display: flex; align-items: center; justify-content: space-between; 
+                                    background-color: #F8F9FA; border: 1px solid #D2D3D5; border-radius: 6px; 
+                                    padding: 0.5rem 1rem; margin-bottom: 0.8rem; font-family: 'Questrial', sans-serif;">
+                            <span style="font-family: 'Montserrat', sans-serif; font-weight: bold; font-size: 1.1rem; color: #111111;">
+                                {sku}
+                            </span>
+                            <button onclick="navigator.clipboard.writeText('{sku}').then(() => {{
+                                const btn = document.getElementById('copy-btn-cad');
+                                btn.innerHTML = '✅ Copiado!';
+                                btn.style.backgroundColor = '#16a34a';
+                                setTimeout(() => {{
+                                    btn.innerHTML = '📋 Copiar SKU';
+                                    btn.style.backgroundColor = '#EC2024';
+                                }}, 2000);
+                            }})" id="copy-btn-cad" style="
+                                background-color: #EC2024;
+                                color: white;
+                                border: none;
+                                border-radius: 4px;
+                                padding: 6px 14px;
+                                font-weight: bold;
+                                font-family: 'Questrial', sans-serif;
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                            " onmouseover="this.style.backgroundColor='#111111'" onmouseout="if(this.innerHTML!=='✅ Copiado!') this.style.backgroundColor='#EC2024'">
+                                📋 Copiar SKU
+                            </button>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f"""<div style="background:#f0f9ff;border:1px solid #bae6fd;
+                            border-radius:8px;padding:.8rem 1.2rem;margin:.5rem 0;
+                            display:flex;flex-wrap:wrap;gap:1.5rem;font-size:.9rem;">
+                          <span>📌 <b>No. Pieza:</b> {selected_piece['numero_pieza']}</span>
+                          <span>🧱 <b>Material:</b> {selected_piece['material']}</span>
+                          <span>📏 <b>Espesor:</b> {selected_piece['espesor_materia_prima']:.4f} in</span>
+                          <span>📐 <b>Largo:</b> {selected_piece['largo_materia_prima']:.3f} in</span>
+                          <span>↔️ <b>Ancho:</b> {selected_piece['ancho_materia_prima']:.3f} in</span>
+                          <span>🎨 <b>Acabado:</b> {selected_piece['acabado_estandar']}</span>
+                          <span>🔖 <b>Factor K:</b> {selected_piece['factor_k']}</span>
+                          <span>📋 <b>Versión:</b> {selected_piece['version']}-{selected_piece['revision']}</span>
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+
+            st.markdown("---")
+            st.markdown("#### 📐 Vista Interactiva 3D (WebGL)")
 
     
     # Setup dimension values based on selected option
@@ -295,30 +417,54 @@ def show_cad_viewer():
     sku_for_overlay = "Manual"
     
     # Navigation logic calculations (placed early so html_code can interpolate them)
-    only_pieces = [p["nombre_sku"] for p in filtered_pieces]
-    prev_disabled = True
-    next_disabled = True
-    prev_target = None
-    next_target = None
-    middle_text = ""
+    prev_direct_url = ""
+    next_direct_url = ""
     
-    if len(only_pieces) > 0:
-        if selected_piece:
-            current_idx = only_pieces.index(selected_piece["nombre_sku"])
-            prev_disabled = current_idx <= 0
-            next_disabled = current_idx >= len(only_pieces) - 1
-            middle_text = f"Pieza {current_idx + 1} de {len(only_pieces)}"
-            prev_target = only_pieces[current_idx - 1] if not prev_disabled else None
-            next_target = only_pieces[current_idx + 1] if not next_disabled else None
+    if direct_fullscreen and selected_piece and len(registered_pieces) > 0:
+        try:
+            curr_pos = [p.get("id") for p in registered_pieces].index(selected_piece.get("id"))
+        except ValueError:
+            curr_pos = 0
+        prev_p = registered_pieces[curr_pos - 1] if curr_pos > 0 else None
+        next_p = registered_pieces[curr_pos + 1] if curr_pos < len(registered_pieces) - 1 else None
+        
+        if prev_p:
+            prev_direct_url = f"?fullscreen=cad&sku={prev_p.get('nombre_sku','').replace(' ', '%20')}&pieza={str(prev_p.get('numero_pieza','')).replace(' ', '%20')}"
+            prev_disabled_attr = ""
         else:
-            prev_disabled = True
-            next_disabled = False
-            middle_text = f"Filtro: {len(only_pieces)} pieza{'s' if len(only_pieces) != 1 else ''}"
-            prev_target = None
-            next_target = only_pieces[0]
+            prev_disabled_attr = "disabled"
+            
+        if next_p:
+            next_direct_url = f"?fullscreen=cad&sku={next_p.get('nombre_sku','').replace(' ', '%20')}&pieza={str(next_p.get('numero_pieza','')).replace(' ', '%20')}"
+            next_disabled_attr = ""
+        else:
+            next_disabled_attr = "disabled"
+    elif not embed_mode:
+        filtered_labels = list(label_to_piece.keys())
+        prev_disabled = True
+        next_disabled = True
+        prev_target = None
+        next_target = None
+        middle_text = ""
+        
+        if len(filtered_labels) > 0:
+            current_label = format_piece_label(selected_piece) if selected_piece else None
+            if current_label and current_label in filtered_labels:
+                current_idx = filtered_labels.index(current_label)
+                prev_disabled = current_idx <= 0
+                next_disabled = current_idx >= len(filtered_labels) - 1
+                middle_text = f"Pieza {current_idx + 1} de {len(filtered_labels)}"
+                prev_target = filtered_labels[current_idx - 1] if not prev_disabled else None
+                next_target = filtered_labels[current_idx + 1] if not next_disabled else None
+            else:
+                prev_disabled = True
+                next_disabled = len(filtered_labels) <= 1
+                middle_text = f"Filtro: {len(filtered_labels)} pieza{'s' if len(filtered_labels) != 1 else ''}"
+                prev_target = None
+                next_target = filtered_labels[0]
 
-    prev_disabled_attr = "disabled" if prev_disabled else ""
-    next_disabled_attr = "disabled" if next_disabled else ""
+        prev_disabled_attr = "disabled" if prev_disabled else ""
+        next_disabled_attr = "disabled" if next_disabled else ""
     
     step_units = "in"
     stl_data_b64 = ""
@@ -357,15 +503,18 @@ def show_cad_viewer():
             if file_ext == ".stl":
                 stl_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "stl"
-                st.success(f"✅ Modelo STL: `{clean_name}` ({len(file_bytes)//1024} KB)")
+                if not direct_fullscreen:
+                    st.success(f"✅ Modelo STL: `{clean_name}` ({len(file_bytes)//1024} KB)")
             elif file_ext in [".step", ".stp"]:
                 step_data_b64 = base64.b64encode(file_bytes).decode('utf-8')
                 file_type = "step"
                 step_units = detect_step_units(file_bytes)
-                st.success(f"✅ Modelo STEP: `{clean_name}` ({len(file_bytes)//1024} KB) — El visor 3D tardará unos segundos en triangular la geometría CAD")
+                if not direct_fullscreen:
+                    st.success(f"✅ Modelo STEP: `{clean_name}` ({len(file_bytes)//1024} KB) — El visor 3D tardará unos segundos en triangular la geometría CAD")
         else:
             file_type = "mock"
-            st.info("💡 Renderizando malla dinámica en base a parámetros registrados (No se encontró archivo STEP/STL físico)")
+            if not direct_fullscreen:
+                st.info("💡 Renderizando malla dinámica en base a parámetros registrados (No se encontró archivo STEP/STL físico)")
             
     elif uploaded_step:
         file_ext = os.path.splitext(uploaded_step.name)[1].lower()
@@ -384,6 +533,77 @@ def show_cad_viewer():
             step_units = detect_step_units(file_bytes)
             st.success(f"✅ Archivo STEP '{uploaded_step.name}' cargado con éxito ({step_units}). Procesando geometría...")
             
+    # Technical metadata for HUD & Direct Downloads
+    numero_plano_val = "S/N"
+    acabado_val = "Estándar"
+    version_rev_val = "v1-0"
+    plano_url = ""
+    plano_filename = ""
+    step_url = ""
+    step_filename = ""
+    
+    if selected_piece:
+        numero_plano_val = selected_piece.get("numero_plano") or selected_piece.get("numero_pieza") or "S/N"
+        acabado_val = selected_piece.get("acabado_estandar") or "Estándar"
+        version_rev_val = f"v{selected_piece.get('version', '1')}-{selected_piece.get('revision', '0')}"
+        
+        from src.services.gcs_storage import generate_secure_signed_url
+        plano_path = selected_piece.get("archivo_plano_control") or selected_piece.get("archivo_dibujo_original")
+        if plano_path:
+            plano_url = generate_secure_signed_url(plano_path, expiration_minutes=60) or ""
+            plano_filename = os.path.basename(str(plano_path).replace("\\", "/").split("?")[0])
+            
+        step_gcs_path = selected_piece.get("archivo_step")
+        if step_gcs_path:
+            step_url = generate_secure_signed_url(step_gcs_path, expiration_minutes=60) or ""
+            step_filename = os.path.basename(str(step_gcs_path).replace("\\", "/").split("?")[0])
+
+    largo_mm = largo_val * 25.4
+    ancho_mm = ancho_val * 25.4
+    espesor_mm = espesor_val * 25.4
+    
+    if plano_url:
+        short_plano = (plano_filename[:22] + '...') if len(plano_filename) > 25 else plano_filename
+        btn_dl_plano_html = f'<a href="{plano_url}" target="_blank" download="{plano_filename}" class="hud-action-btn pdf-btn" title="Descargar Plano de Control (PDF)">📄 Plano Control ({short_plano})</a>'
+    else:
+        btn_dl_plano_html = '<span class="hud-action-btn disabled" title="No hay plano de control PDF registrado">⚠️ Sin Plano PDF</span>'
+        
+    if step_url:
+        short_cad = (step_filename[:22] + '...') if len(step_filename) > 25 else step_filename
+        btn_dl_cad_html = f'<a href="{step_url}" target="_blank" download="{step_filename}" class="hud-action-btn cad-btn" title="Descargar Modelo 3D STEP">📦 Modelo CAD ({short_cad})</a>'
+    else:
+        btn_dl_cad_html = '<span class="hud-action-btn disabled" title="Geometría generada paramétricamente">💡 Malla Paramétrica</span>'
+
+    # Cargar fondo corporativo Sigrama para el visor 3D
+    bg_data_uri = ""
+    for potential_bg in [
+        os.path.join(os.path.dirname(__file__), "..", "assets", "sigrama_cad_bg.jpg"),
+        os.path.join(os.getcwd(), "src", "assets", "sigrama_cad_bg.jpg"),
+        os.path.join(os.getcwd(), "sigrama_cad_bg.jpg"),
+        r"C:\Users\albertol\.gemini\antigravity\brain\ae6b4388-dd88-4c6e-99c5-b9c717017b83\.user_uploaded\media_1790640640941.jpg"
+    ]:
+        if os.path.exists(potential_bg):
+            try:
+                with open(potential_bg, "rb") as f:
+                    bg_b64 = base64.b64encode(f.read()).decode("utf-8")
+                    bg_data_uri = f"data:image/jpeg;base64,{bg_b64}"
+                    break
+            except Exception:
+                pass
+
+    btn_close_fullscreen_html = ""
+    if direct_fullscreen:
+        btn_close_fullscreen_html = """
+        <div style="display:flex; gap:6px; margin-top:10px; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 8px;">
+            <a href="?menu=consulta" target="_top" class="hud-action-btn" style="background:#334155; color:#fff; text-decoration:none; text-align:center; padding:6px 10px; font-size:12px; font-weight:bold; border-radius:6px; flex:1;" title="Regresar al Área de Consulta de Piezas">
+                🔙 Consulta
+            </a>
+            <button onclick="window.close()" class="hud-action-btn" style="background:rgba(239,68,68,0.85); color:#fff; border:none; text-align:center; padding:6px 10px; font-size:12px; font-weight:bold; border-radius:6px; cursor:pointer; flex:1;" title="Cerrar esta ventana 3D">
+                ✕ Cerrar
+            </button>
+        </div>
+        """
+
     # Three.js embed HTML with dynamic coordinates and overlay
     html_code = f"""
     <!DOCTYPE html>
@@ -391,83 +611,290 @@ def show_cad_viewer():
     <head>
         <meta charset="utf-8">
         <style>
-            body {{ margin: 0; overflow: hidden; background-color: #e2e8f0; font-family: sans-serif; }}
-            #canvas-container {{ width: 100%; height: 500px; position: relative; }}
+            body {{ 
+                margin: 0; 
+                overflow: hidden; 
+                background-color: #f8fafc; 
+                background-image: url('{bg_data_uri}');
+                background-size: cover;
+                background-position: center center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+                font-family: sans-serif; 
+            }}
+            #canvas-container {{ 
+                width: 100%; 
+                height: {height - 20 if embed_mode else 500}px; 
+                position: relative; 
+                background: transparent !important;
+            }}
+            #canvas-container canvas {{
+                display: block;
+                width: 100%;
+                height: 100%;
+                background: transparent !important;
+            }}
+            body.parent-fullscreen canvas,
+            body.parent-fullscreen #canvas-container canvas {{
+                width: 100vw !important;
+                height: 100vh !important;
+                display: block !important;
+            }}
+            :fullscreen #canvas-container,
+            :-webkit-full-screen #canvas-container,
+            body.parent-fullscreen,
+            body.parent-fullscreen #canvas-container {{
+                width: 100vw !important;
+                height: 100vh !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+            }}
             .dim-label {{
                 background: rgba(0, 86, 179, 0.88);
                 color: #fff;
-                font-size: 22px;
+                font-size: 20px;
                 font-weight: bold;
                 font-family: 'Courier New', monospace;
                 padding: 4px 10px;
-                border-radius: 3px;
+                border-radius: 4px;
                 border: 1px solid #0369a1;
                 white-space: nowrap;
                 pointer-events: none;
                 user-select: none;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             }}
+            body.parent-fullscreen .dim-label {{
+                font-size: 24px !important;
+                padding: 6px 14px !important;
+            }}
+            
+            /* ── SolidWorks Heads-Up View Toolbar (Top Center) ── */
+            #sw-heads-up-toolbar {{
+                position: absolute;
+                top: 12px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 250;
+                display: flex;
+                align-items: center;
+                background: rgba(15, 23, 42, 0.90);
+                backdrop-filter: blur(8px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                padding: 4px 8px;
+                gap: 4px;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+            }}
+            body.parent-fullscreen #sw-heads-up-toolbar {{
+                top: 20px;
+                padding: 6px 12px;
+                gap: 6px;
+                border-radius: 10px;
+            }}
+            .sw-btn {{
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                color: #f1f5f9;
+                padding: 5px 7px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                user-select: none;
+            }}
+            body.parent-fullscreen .sw-btn {{
+                padding: 7px 10px;
+            }}
+            .sw-btn:hover {{
+                background: rgba(56, 189, 248, 0.25);
+                border-color: #38bdf8;
+                color: #38bdf8;
+                transform: translateY(-1px);
+            }}
+            .sw-btn.active {{
+                background: #0284c7;
+                border-color: #38bdf8;
+                color: #ffffff;
+            }}
+            .sw-sep {{
+                width: 1px;
+                height: 18px;
+                background: rgba(255, 255, 255, 0.2);
+                margin: 0 2px;
+            }}
+            body.parent-fullscreen .sw-sep {{
+                height: 24px;
+            }}
+
+            /* ── Technical Inspection HUD Card (Top Left) ── */
             #info-overlay {{
                 position: absolute;
-                top: 10px;
-                left: 10px;
+                top: 12px;
+                left: 12px;
                 color: #f8fafc;
-                background: rgba(15, 23, 42, 0.8);
-                padding: 10px;
+                background: rgba(15, 23, 42, 0.90);
+                backdrop-filter: blur(8px);
+                padding: 12px 14px;
+                border-radius: 8px;
+                font-size: 13px;
+                border: 1px solid rgba(56, 189, 248, 0.3);
+                pointer-events: auto;
+                z-index: 200;
+                width: 300px;
+                max-width: 90vw;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+                transition: all 0.2s ease;
+            }}
+            body.parent-fullscreen #info-overlay {{
+                top: 20px;
+                left: 20px;
+                width: 380px;
+                padding: 16px 20px;
+                font-size: 14px;
+                box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            }}
+            #hud-header {{
+                display: flex;
+                flex-direction: column;
+                margin-bottom: 8px;
+                border-bottom: 1px solid rgba(255,255,255,0.15);
+                padding-bottom: 6px;
+            }}
+            #hud-badge {{
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.08em;
+                color: #38bdf8;
+                text-transform: uppercase;
+                margin-bottom: 3px;
+            }}
+            #hud-title {{
+                font-size: 15px;
+                font-weight: 700;
+                color: #ffffff;
+                line-height: 1.25;
+            }}
+            body.parent-fullscreen #hud-title {{
+                font-size: 18px;
+            }}
+            .hud-meta-grid {{
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-bottom: 8px;
+            }}
+            .hud-lbl {{
+                color: #94a3b8;
+                font-weight: 600;
+                font-size: 11px;
+            }}
+            body.parent-fullscreen .hud-lbl {{
+                font-size: 12px;
+            }}
+            .hud-val {{
+                color: #f1f5f9;
+                font-weight: 700;
+                font-size: 12px;
+            }}
+            body.parent-fullscreen .hud-val {{
+                font-size: 13px;
+            }}
+            .bold-yellow {{
+                color: #facc15 !important;
+                font-weight: 800 !important;
+                background: rgba(250, 204, 21, 0.15);
+                padding: 1px 6px;
+                border-radius: 4px;
+                border: 1px solid rgba(250, 204, 21, 0.3);
+            }}
+            .hud-section-divider {{
+                height: 1px;
+                background: rgba(255,255,255,0.12);
+                margin: 8px 0;
+            }}
+            .hud-dim-title {{
+                font-size: 10px;
+                font-weight: 800;
+                color: #38bdf8;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                margin-bottom: 5px;
+            }}
+            .hud-dim-table {{
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 11px;
+                text-align: left;
+            }}
+            body.parent-fullscreen .hud-dim-table {{
+                font-size: 13px;
+            }}
+            .hud-dim-table th {{
+                background: rgba(2, 132, 199, 0.3);
+                color: #bae6fd;
+                padding: 3px 6px;
+                font-weight: 700;
+                border: 1px solid rgba(255,255,255,0.1);
+            }}
+            .hud-dim-table td {{
+                padding: 3px 6px;
+                border: 1px solid rgba(255,255,255,0.08);
+                color: #f8fafc;
+            }}
+            .hud-downloads {{
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                margin-top: 6px;
+            }}
+            .hud-action-btn {{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                padding: 6px 12px;
                 border-radius: 6px;
                 font-size: 12px;
-                border: 1px solid #334155;
-                pointer-events: none;
-                z-index: 100;
-            }}
-            .dimension-label {{
                 font-weight: bold;
-                color: #38bdf8;
-            }}
-            #toggle-dim-btn {{
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                z-index: 200;
-                background: rgba(0, 86, 179, 0.90);
-                color: #fff;
-                border: 1px solid #0369a1;
-                border-radius: 5px;
-                padding: 5px 12px;
-                font-size: 12px;
-                font-weight: bold;
-                font-family: sans-serif;
-                cursor: pointer;
-                transition: background 0.2s;
+                text-decoration: none !important;
+                transition: all 0.2s;
+                text-align: center;
                 user-select: none;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2);
             }}
-            #toggle-dim-btn:hover {{
-                background: rgba(0, 56, 120, 0.95);
+            body.parent-fullscreen .hud-action-btn {{
+                padding: 9px 14px;
+                font-size: 13px;
             }}
-            #toggle-grid-btn {{
-                position: absolute;
-                top: 44px;
-                right: 10px;
-                z-index: 200;
+            .pdf-btn {{
+                background: #0284c7 !important;
+                color: #ffffff !important;
+                border: 1px solid #38bdf8 !important;
             }}
-            #fullscreen-btn {{
-                position: absolute;
-                top: 78px;
-                right: 10px;
-                z-index: 200;
-                background: rgba(0, 86, 179, 0.90);
-                color: #fff;
-                border: 1px solid #0369a1;
-                border-radius: 5px;
-                padding: 5px 12px;
-                font-weight: bold;
-                font-family: sans-serif;
-                cursor: pointer;
-                transition: background 0.2s;
-                user-select: none;
+            .pdf-btn:hover {{
+                background: #0369a1 !important;
+                transform: translateY(-1px);
             }}
-            #fullscreen-btn:hover {{
-                background: rgba(0, 56, 120, 0.95);
+            .cad-btn {{
+                background: #4f46e5 !important;
+                color: #ffffff !important;
+                border: 1px solid #818cf8 !important;
             }}
+            .cad-btn:hover {{
+                background: #4338ca !important;
+                transform: translateY(-1px);
+            }}
+            .hud-action-btn.disabled {{
+                background: rgba(71, 85, 105, 0.4) !important;
+                color: #94a3b8 !important;
+                border: 1px solid rgba(148, 163, 184, 0.2) !important;
+                cursor: not-allowed;
+            }}
+
+            /* ── Bottom Controls ── */
             #sku-overlay-btn {{
                 position: absolute;
                 bottom: 15px;
@@ -479,7 +906,7 @@ def show_cad_viewer():
                 border: 2px solid #b30000 !important;
                 border-radius: 8px;
                 padding: 10px 24px;
-                font-size: 20px;
+                font-size: 18px;
                 font-weight: bold;
                 font-family: sans-serif;
                 cursor: pointer;
@@ -487,22 +914,24 @@ def show_cad_viewer():
                 user-select: none;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             }}
+            body.parent-fullscreen #sku-overlay-btn {{
+                bottom: 25px;
+                font-size: 22px;
+                padding: 12px 30px;
+            }}
             #sku-overlay-btn:hover {{
                 background: #b30000 !important;
                 transform: translateX(-50%) scale(1.03);
-            }}
-            #sku-overlay-btn:active {{
-                transform: translateX(-50%) scale(0.97);
             }}
             #prev-overlay-btn {{
                 position: absolute;
                 bottom: 15px;
                 left: 15px;
                 z-index: 200;
-                background: #EC2024 !important; /* Corporate Red */
+                background: #EC2024 !important;
                 color: #fff !important;
                 border: 1px solid #b30000 !important;
-                border-radius: 5px;
+                border-radius: 6px;
                 padding: 8px 16px;
                 font-size: 14px;
                 font-weight: bold;
@@ -511,6 +940,12 @@ def show_cad_viewer():
                 transition: background 0.2s;
                 user-select: none;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+            }}
+            body.parent-fullscreen #prev-overlay-btn {{
+                bottom: 25px;
+                left: 25px;
+                padding: 12px 22px;
+                font-size: 16px;
             }}
             #prev-overlay-btn:hover {{
                 background: #b30000 !important;
@@ -527,10 +962,10 @@ def show_cad_viewer():
                 bottom: 15px;
                 right: 15px;
                 z-index: 200;
-                background: #EC2024 !important; /* Corporate Red */
+                background: #EC2024 !important;
                 color: #fff !important;
                 border: 1px solid #b30000 !important;
-                border-radius: 5px;
+                border-radius: 6px;
                 padding: 8px 16px;
                 font-size: 14px;
                 font-weight: bold;
@@ -539,6 +974,12 @@ def show_cad_viewer():
                 transition: background 0.2s;
                 user-select: none;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+            }}
+            body.parent-fullscreen #next-overlay-btn {{
+                bottom: 25px;
+                right: 25px;
+                padding: 12px 22px;
+                font-size: 16px;
             }}
             #next-overlay-btn:hover {{
                 background: #b30000 !important;
@@ -550,119 +991,6 @@ def show_cad_viewer():
                 cursor: not-allowed;
                 box-shadow: none;
             }}
-            :fullscreen #canvas-container,
-            :-webkit-full-screen #canvas-container,
-            body.parent-fullscreen,
-            body.parent-fullscreen #canvas-container {{
-                width: 100vw !important;
-                height: 100vh !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-            }}
-            #style-selector {{
-                position: absolute;
-                top: 112px;
-                right: 10px;
-                z-index: 200;
-                background: rgba(0, 86, 179, 0.90);
-                color: #fff;
-                border: 1px solid #0369a1;
-                border-radius: 5px;
-                padding: 4px;
-                font-size: 12px;
-                font-weight: bold;
-                font-family: sans-serif;
-                cursor: pointer;
-                outline: none;
-            }}
-            #style-selector option {{
-                background: #0f172a;
-                color: #fff;
-            }}
-            #measure-btn {{
-                position: absolute;
-                top: 146px;
-                right: 10px;
-                z-index: 200;
-                background: rgba(5, 150, 105, 0.92);
-                color: #fff;
-                border: 1px solid #059669;
-                border-radius: 5px;
-                padding: 5px 12px;
-                font-size: 12px;
-                font-weight: bold;
-                font-family: sans-serif;
-                cursor: pointer;
-                transition: background 0.2s;
-                user-select: none;
-            }}
-            .view-btn {{
-                background: rgba(0, 86, 179, 0.90);
-                color: #fff;
-                border: 1px solid #0369a1;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 11px;
-                font-weight: bold;
-                font-family: sans-serif;
-                cursor: pointer;
-                transition: background 0.2s;
-                user-select: none;
-            }}
-            #view-iso-btn {{
-                background: #16a34a !important;
-                color: #fff !important;
-                border: 1px solid #15803d !important;
-            }}
-            #view-iso-btn:hover {{
-                background: #15803d !important;
-            }}
-            #view-front-btn {{
-                background: #ffffff !important;
-                color: #1e293b !important;
-                border: 1px solid #cbd5e1 !important;
-            }}
-            #view-front-btn:hover {{
-                background: #f1f5f9 !important;
-            }}
-            #view-top-btn {{
-                background: #ef4444 !important;
-                color: #fff !important;
-                border: 1px solid #dc2626 !important;
-            }}
-            #view-top-btn:hover {{
-                background: #dc2626 !important;
-            }}
-            #view-side-btn {{
-                background: #16a34a !important;
-                color: #fff !important;
-                border: 1px solid #15803d !important;
-            }}
-            #view-side-btn:hover {{
-                background: #15803d !important;
-            }}
-            #zoom-all-btn {{
-                background: #0284c7 !important;
-                color: #fff !important;
-                border: 1px solid #0369a1 !important;
-                margin-top: 2px;
-            }}
-            #zoom-all-btn:hover {{
-                background: #0369a1 !important;
-            }}
-            .view-btn:hover {{
-                background: rgba(0, 56, 120, 0.95);
-            }}
-            #view-btn-container {{
-                position: absolute;
-                top: 165px;
-                left: 10px;
-                z-index: 200;
-                display: grid;
-                grid-template-columns: repeat(4, auto);
-                gap: 5px;
-            }}
         </style>
         <!-- Three.js CDN global UMD - compatible con iframe srcdoc de Streamlit -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -671,41 +999,168 @@ def show_cad_viewer():
         <script src="https://unpkg.com/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
     </head>
     <body>
+        <!-- ── SolidWorks Heads-Up View Toolbar (Top Center) ── -->
+        <div id="sw-heads-up-toolbar">
+            <button class="sw-btn" id="btn-zoom-fit" title="Ajustar a Pantalla / Zoom All (F)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                </svg>
+            </button>
+            <div class="sw-sep"></div>
+            <button class="sw-btn active" id="btn-view-iso" title="Vista Isométrica (Tridimensional)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/>
+                    <path d="M12 11l8-4.5M12 11v9M12 11L4 6.5"/>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-view-front" title="Vista Frontal (Eje Z)">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="#38bdf8" stroke="#0284c7" stroke-width="2"/>
+                    <text x="12" y="15" font-size="9" font-weight="900" fill="#0f172a" text-anchor="middle" font-family="sans-serif">F</text>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-view-top" title="Vista Superior / Planta (Eje Y)">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+                    <rect x="4" y="4" width="16" height="6.5" rx="1" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5"/>
+                    <text x="12" y="10" font-size="6" font-weight="bold" fill="#0f172a" text-anchor="middle" font-family="sans-serif">TOP</text>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-view-side" title="Vista Lateral Derecha (Eje X)">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+                    <rect x="12" y="4" width="8" height="16" rx="1" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5"/>
+                    <text x="16" y="14" font-size="7" font-weight="bold" fill="#0f172a" text-anchor="middle" font-family="sans-serif">R</text>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-view-left" title="Vista Lateral Izquierda">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5"/>
+                    <rect x="4" y="4" width="8" height="16" rx="1" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5"/>
+                    <text x="8" y="14" font-size="7" font-weight="bold" fill="#0f172a" text-anchor="middle" font-family="sans-serif">L</text>
+                </svg>
+            </button>
+            <div class="sw-sep"></div>
+            <button class="sw-btn" id="btn-rotate-90" title="Rotar Vista 90° (Alinear Horizontal/Vertical)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12a9 9 0 1 1-3.2-6.9L21 8"/>
+                    <path d="M21 3v5h-5"/>
+                </svg>
+            </button>
+            <div class="sw-sep"></div>
+            <button class="sw-btn active" id="btn-style-shaded" title="Sombreado Técnico con Aristas">
+                <svg viewBox="0 0 24 24" width="18" height="18">
+                    <rect x="4" y="4" width="16" height="16" rx="2" fill="#cbd5e1" stroke="#0f172a" stroke-width="2"/>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-style-wireframe" title="Estructura Alámbrica / Wireframe">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="4" y="4" width="16" height="16" rx="1"/>
+                    <line x1="4" y1="4" x2="20" y2="20"/>
+                    <line x1="20" y1="4" x2="4" y2="20"/>
+                </svg>
+            </button>
+            <div class="sw-sep"></div>
+            <button class="sw-btn active" id="btn-sw-dims" title="Mostrar/Ocultar Cotas (Medidas)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="5" x2="3" y2="19"/>
+                    <line x1="21" y1="5" x2="21" y2="19"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <polygon points="7,10 3,12 7,14" fill="currentColor"/>
+                    <polygon points="17,10 21,12 17,14" fill="currentColor"/>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-sw-grid" title="Mostrar/Ocultar Malla de Referencia">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                    <line x1="15" y1="3" x2="15" y2="21"/>
+                </svg>
+            </button>
+            <div class="sw-sep"></div>
+            <button class="sw-btn" id="btn-sw-snapshot" title="📸 Copiar Captura al Portapapeles (Ctrl+V)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#22c55e" stroke-width="2">
+                    <rect x="3" y="5" width="18" height="14" rx="2"/>
+                    <circle cx="12" cy="12" r="3.5"/>
+                    <circle cx="17.5" cy="8.5" r="1" fill="#22c55e"/>
+                </svg>
+            </button>
+            <button class="sw-btn" id="btn-sw-fullscreen" title="🖥️ Maximizar / Salir Pantalla Completa">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- ── Technical Inspection HUD Card (Top Left) ── -->
         <div id="info-overlay">
-            <div><strong>Pieza:</strong> {pieza_id_str}</div>
-            <div><span class="dimension-label">Largo Nominal:</span> {largo_val:.3f} in</div>
-            <div><span class="dimension-label">Ancho Nominal:</span> {ancho_val:.3f} in</div>
-            <div><span class="dimension-label">Espesor Chapa:</span> {espesor_val:.4f} in ({material_val})</div>
-            <div><span class="dimension-label">Ángulo de Doblez:</span> 90° (Cotas A-J)</div>
-            <div style="margin-top: 5px; font-size:10px; color:#94a3b8;" id="control-hint">* Click Izq + Arrastrar para rotar, Click Der para desplazar, Rueda para Zoom</div>
+            <div id="hud-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <span id="hud-badge">FICHA DE INSPECCIÓN DIMENSIONAL</span>
+                    <span id="hud-title">{pieza_id_str}</span>
+                </div>
+                <button id="btn-toggle-hud" title="Minimizar / Expandir Ficha" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; color: #f8fafc; font-size: 14px; font-weight: bold; cursor: pointer; padding: 1px 7px; margin-left: 8px; line-height: 1.2;">−</button>
+            </div>
+            <div id="hud-body">
+                <div class="hud-meta-grid">
+                    <div><span class="hud-lbl">No. Plano:</span> <span class="hud-val bold-yellow">{numero_plano_val}</span></div>
+                    <div><span class="hud-lbl">Material:</span> <span class="hud-val">{material_val}</span></div>
+                    <div><span class="hud-lbl">Acabado:</span> <span class="hud-val">{acabado_val}</span> | <span class="hud-val">{version_rev_val}</span></div>
+                </div>
+                <div class="hud-section-divider"></div>
+                <div class="hud-dim-title">ESPECIFICACIONES DIMENSIONALES</div>
+                <table class="hud-dim-table">
+                    <thead>
+                        <tr><th>Cota</th><th>Pulgadas (in)</th><th>Milímetros (mm)</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Largo</strong></td><td>{largo_val:.3f}"</td><td>{largo_mm:.2f} mm</td></tr>
+                        <tr><td><strong>Ancho</strong></td><td>{ancho_val:.3f}"</td><td>{ancho_mm:.2f} mm</td></tr>
+                        <tr><td><strong>Espesor</strong></td><td>{espesor_val:.4f}"</td><td>{espesor_mm:.3f} mm</td></tr>
+                    </tbody>
+                </table>
+                <div class="hud-section-divider"></div>
+                <div class="hud-dim-title">📥 DESCARGA DE DOCUMENTACIÓN</div>
+                <div class="hud-downloads">
+                    {btn_dl_plano_html}
+                    {btn_dl_cad_html}
+                </div>
+                {btn_close_fullscreen_html}
+            </div>
         </div>
-        <div id="view-btn-container">
-            <button class="view-btn" id="view-iso-btn" title="Vista Isométrica" style="grid-column: 1; grid-row: 1;">👁️ Iso</button>
-            <button class="view-btn" id="view-front-btn" title="Vista Frontal (Eje Z)" style="grid-column: 2; grid-row: 1;">Frontal</button>
-            <button class="view-btn" id="view-top-btn" title="Vista Superior (Eje Y)" style="grid-column: 3; grid-row: 1;">Superior</button>
-            <button class="view-btn" id="view-side-btn" title="Vista Lateral (Eje X)" style="grid-column: 4; grid-row: 1;">Lateral</button>
-            <button class="view-btn" id="zoom-all-btn" title="Extender Imagen (Zoom All)" style="grid-column: 1; grid-row: 2;">🔍 Zoom All</button>
-        </div>
+
+        <!-- ── Bottom Overlay Navigation ── -->
         <button id="prev-overlay-btn" {prev_disabled_attr} title="Pieza Anterior">⬅️ Pieza Anterior</button>
-        <button id="toggle-dim-btn" title="Mostrar/ocultar cotas dimensionales">📐 Ocultar Cotas</button>
-        <button id="toggle-grid-btn" title="Mostrar/ocultar malla de referencia" style="background: rgba(80, 80, 80, 0.85);">⋯ Mostrar Malla</button>
-        <button id="fullscreen-btn" title="Maximizar a pantalla completa">🖥️ Pantalla Completa</button>
         <button id="sku-overlay-btn" title="Copiar SKU al portapapeles">📋 SKU: {sku_for_overlay}</button>
         <button id="next-overlay-btn" {next_disabled_attr} title="Siguiente Pieza">Siguiente Pieza ➡️</button>
-        <select id="style-selector" title="Estilo Visual">
-            <option value="shaded_edges">Sombreado con Bordes</option>
-            <option value="wireframe">Estructura Alámbrica</option>
-            <option value="monochrome" selected>Monocromático Técnico</option>
-        </select>
+        
         <div id="canvas-container"></div>
         
         <script>
+            // Helper function to detect fullscreen in current document or parent frame
+            function checkIsFullscreen() {{
+                try {{
+                    if (document.fullscreenElement || document.webkitFullscreenElement) return true;
+                    if (window.parent && window.parent.document) {{
+                        const pDoc = window.parent.document;
+                        if (pDoc.fullscreenElement || pDoc.webkitFullscreenElement) return true;
+                    }}
+                }} catch(e) {{}}
+                return false;
+            }}
+
+            // Immediately apply parent-fullscreen if loaded within a fullscreen frame or direct fullscreen
+            if ({ 'true' if direct_fullscreen else 'false' } || checkIsFullscreen()) {{
+                document.body.classList.add('parent-fullscreen');
+            }}
+
             // Three.js globales cargados via CDN UMD (THREE, THREE.OrbitControls, etc.)
-            // Set up scene, camera, renderer
             const container = document.getElementById('canvas-container');
             
             const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xe2e8f0);
+            scene.background = null; // Canvas transparente para permitir que el fondo corporativo Sigrama sea visible
             
             // Grid helper
             let gridHelper = new THREE.GridHelper(30, 30, 0x0056b3, 0x94a3b8);
@@ -713,29 +1168,87 @@ def show_cad_viewer():
             gridHelper.visible = false; // Start hidden
             scene.add(gridHelper);
             
-            // Determine width dynamically, falling back to window.innerWidth or 800 if clientWidth is 0 (occurs on loading inside Streamlit iframe)
-            const width = container.clientWidth || window.innerWidth || 800;
-            
-            const camera = new THREE.PerspectiveCamera(45, width / 500, 0.1, 1000);
+            // Function to get current effective dimensions
+            function getViewportDimensions() {{
+                const isFs = checkIsFullscreen();
+                let w = window.innerWidth || document.documentElement.clientWidth || 800;
+                let h = isFs ? (window.innerHeight || document.documentElement.clientHeight || 800) : 500;
+                
+                if (container && container.clientWidth > 0) {{
+                    w = container.clientWidth;
+                }}
+                if (isFs) {{
+                    if (container && container.clientHeight > 200) {{
+                        h = container.clientHeight;
+                    }} else {{
+                        h = window.innerHeight || document.documentElement.clientHeight || 800;
+                    }}
+                }} else {{
+                    h = 500;
+                }}
+                return {{ w, h, isFs }};
+            }}
+
+            const initDim = getViewportDimensions();
+            const camera = new THREE.PerspectiveCamera(45, initDim.w / initDim.h, 0.1, 1000);
             camera.position.set(20, 15, 25);
             
-            const renderer = new THREE.WebGLRenderer({{ antialias: true }});
-            renderer.setSize(width, 500);
+            const renderer = new THREE.WebGLRenderer({{ antialias: true, preserveDrawingBuffer: true, alpha: true }});
+            renderer.setClearColor(0x000000, 0); // Renderizado transparente sobre fondo corporativo
+            renderer.setSize(initDim.w, initDim.h, false);
             renderer.shadowMap.enabled = true;
             renderer.outputEncoding = THREE.sRGBEncoding;
             renderer.physicallyCorrectLights = true;
+            if (renderer.domElement) {{
+                renderer.domElement.style.width = '100%';
+                renderer.domElement.style.height = '100%';
+                renderer.domElement.style.display = 'block';
+            }}
             container.appendChild(renderer.domElement);
             
             // CSS2D renderer for dimension labels
             let labelRenderer = null;
             if (typeof THREE.CSS2DRenderer !== 'undefined') {{
                 labelRenderer = new THREE.CSS2DRenderer();
-                labelRenderer.setSize(width, 500);
+                labelRenderer.setSize(initDim.w, initDim.h);
                 labelRenderer.domElement.style.position = 'absolute';
                 labelRenderer.domElement.style.top = '0';
                 labelRenderer.domElement.style.left = '0';
                 labelRenderer.domElement.style.pointerEvents = 'none';
+                labelRenderer.domElement.style.width = '100%';
+                labelRenderer.domElement.style.height = '100%';
                 container.appendChild(labelRenderer.domElement);
+            }}
+            
+            function updateRendererSize() {{
+                const isFs = checkIsFullscreen();
+                if (isFs) {{
+                    document.body.classList.add('parent-fullscreen');
+                    const fsBtn = document.getElementById('fullscreen-btn');
+                    if (fsBtn) fsBtn.textContent = '🗗 Salir Pantalla';
+                }} else {{
+                    document.body.classList.remove('parent-fullscreen');
+                    const fsBtn = document.getElementById('fullscreen-btn');
+                    if (fsBtn) fsBtn.textContent = '🖥️ Pantalla Completa';
+                }}
+                
+                const dims = getViewportDimensions();
+                const w = dims.w;
+                const h = dims.h;
+                
+                if (camera && renderer) {{
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h, false);
+                    if (renderer.domElement) {{
+                        renderer.domElement.style.width = '100%';
+                        renderer.domElement.style.height = '100%';
+                    }}
+                }}
+                if (labelRenderer) {{
+                    labelRenderer.setSize(w, h);
+                }}
+                return {{ w, h, isFs }};
             }}
             
             // Orbit Controls
@@ -772,7 +1285,6 @@ def show_cad_viewer():
             
             let currentMesh;
             let dimGroup = null; // module-level so toggle button can reach it
-            
             let currentViewName = 'iso';
 
             function fitCamera(viewName) {{
@@ -780,8 +1292,11 @@ def show_cad_viewer():
                 
                 currentViewName = viewName || currentViewName;
                 
+                const dims = updateRendererSize();
+                
                 // Force update matrix world of the entire scene so Box3 has fresh world matrices
                 scene.updateMatrixWorld(true);
+                currentMesh.updateMatrixWorld(true);
                 
                 const box = new THREE.Box3().setFromObject(currentMesh);
                 const center = new THREE.Vector3();
@@ -796,21 +1311,18 @@ def show_cad_viewer():
                 }}
                 
                 const maxDim = Math.max(size.x, size.y, size.z) || 10;
-                
                 controls.target.copy(center);
                 
                 const fovRad = (camera.fov * Math.PI) / 180;
-                const aspect = camera.aspect || (window.innerWidth / window.innerHeight) || 1.6;
+                const aspect = camera.aspect || (dims.w / dims.h) || 1.6;
                 
-                // Extremely robust radius calculation: half of box diagonal length
+                // Radius of bounding sphere
                 const radius = (size.length() * 0.5) || (maxDim * 0.5) || 5;
                 
-                let dist = radius / Math.sin(fovRad / 2);
-                if (aspect < 1) {{
-                    dist = dist / aspect;
-                }}
-                
-                dist = dist * 1.15;
+                // Distance to fit both vertically and horizontally
+                const distV = radius / Math.sin(fovRad / 2);
+                const distH = radius / (Math.sin(fovRad / 2) * aspect);
+                let dist = Math.max(distV, distH) * 1.15;
                 
                 camera.near = Math.min(0.1, dist / 10);
                 camera.far = Math.max(1000, dist * 10);
@@ -823,11 +1335,17 @@ def show_cad_viewer():
                     camera.up.set(0, 0, -1);
                 }} else if (viewName === 'front') {{
                     camera.position.set(center.x, center.y, center.z + dist);
+                    camera.up.set(0, 1, 0);
                 }} else if (viewName === 'side') {{
                     camera.position.set(center.x + dist, center.y, center.z);
+                    camera.up.set(0, 1, 0);
+                }} else if (viewName === 'side_left') {{
+                    camera.position.set(center.x - dist, center.y, center.z);
+                    camera.up.set(0, 1, 0);
                 }} else {{
                     const dir = new THREE.Vector3(1, 0.8, 1).normalize();
                     camera.position.copy(center).addScaledVector(dir, dist);
+                    camera.up.set(0, 1, 0);
                 }}
                 
                 controls.update();
@@ -836,8 +1354,11 @@ def show_cad_viewer():
             function fitCameraKeepOrientation() {{
                 if (!currentMesh) return;
                 
+                const dims = updateRendererSize();
+                
                 // Force update matrix world of the entire scene
                 scene.updateMatrixWorld(true);
+                currentMesh.updateMatrixWorld(true);
                 
                 const box = new THREE.Box3().setFromObject(currentMesh);
                 const center = new THREE.Vector3();
@@ -853,15 +1374,13 @@ def show_cad_viewer():
                 
                 const maxDim = Math.max(size.x, size.y, size.z) || 10;
                 const fovRad = (camera.fov * Math.PI) / 180;
-                const aspect = camera.aspect || (window.innerWidth / window.innerHeight) || 1.6;
+                const aspect = camera.aspect || (dims.w / dims.h) || 1.6;
                 
                 const radius = (size.length() * 0.5) || (maxDim * 0.5) || 5;
                 
-                let dist = radius / Math.sin(fovRad / 2);
-                if (aspect < 1) {{
-                    dist = dist / aspect;
-                }}
-                dist = dist * 1.15;
+                const distV = radius / Math.sin(fovRad / 2);
+                const distH = radius / (Math.sin(fovRad / 2) * aspect);
+                let dist = Math.max(distV, distH) * 1.15;
                 
                 const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
                 if (dir.lengthSq() === 0 || isNaN(dir.x) || isNaN(dir.y) || isNaN(dir.z)) {{
@@ -926,6 +1445,8 @@ def show_cad_viewer():
                     
                     // Adjust camera to fit mesh size
                     fitCamera('iso');
+                    setTimeout(() => fitCameraKeepOrientation(), 80);
+                    setTimeout(() => fitCameraKeepOrientation(), 300);
                     
                     document.getElementById('info-overlay').innerHTML += "<div><span class='dimension-label'>Modo:</span> Malla Real STL</div>";
                     
@@ -1094,6 +1615,8 @@ def show_cad_viewer():
                                 
                                 // Dynamic zoom fit
                                 fitCamera('iso');
+                                setTimeout(() => fitCameraKeepOrientation(), 80);
+                                setTimeout(() => fitCameraKeepOrientation(), 300);
                                 
                                 const unitText = "in (Convertido desde mm)";
                                 document.getElementById('info-overlay').innerHTML += "<div><span class='dimension-label'>Modo:</span> Visualización Real CAD (.STEP)</div>";
@@ -1220,6 +1743,8 @@ def show_cad_viewer():
                 aplicarEstilo('monochrome');
                 if (document.getElementById('style-selector')) document.getElementById('style-selector').value = 'monochrome';
                 fitCamera('iso');
+                setTimeout(() => fitCameraKeepOrientation(), 80);
+                setTimeout(() => fitCameraKeepOrientation(), 300);
             }}
             
             // Animation Loop
@@ -1234,13 +1759,7 @@ def show_cad_viewer():
             
             // Handle window resize
             window.addEventListener('resize', () => {{
-                handleFsChange(); // Sync fullscreen state classes first
-                const w = container.clientWidth || window.innerWidth || 800;
-                const h = container.clientHeight || window.innerHeight || 500;
-                camera.aspect = w / h;
-                camera.updateProjectionMatrix();
-                renderer.setSize(w, h);
-                if (labelRenderer) labelRenderer.setSize(w, h);
+                updateRendererSize();
                 fitCameraKeepOrientation();
             }});
             
@@ -1302,11 +1821,7 @@ def show_cad_viewer():
             const fullscreenBtn = document.getElementById('fullscreen-btn');
             if (fullscreenBtn) {{
                 fullscreenBtn.addEventListener('click', () => {{
-                    const isFs = !!(
-                        document.fullscreenElement ||
-                        document.webkitFullscreenElement ||
-                        (window.parent && window.parent.document && (window.parent.document.fullscreenElement || window.parent.document.webkitFullscreenElement))
-                    );
+                    const isFs = checkIsFullscreen();
                     if (!isFs) {{
                         let target = document.documentElement;
                         if (window.parent && window.parent.document && window.frameElement) {{
@@ -1314,7 +1829,11 @@ def show_cad_viewer():
                         }}
                         const req = target.requestFullscreen || target.webkitRequestFullscreen || target.msRequestFullscreen;
                         if (req) {{
-                            req.call(target).catch(err => {{
+                            req.call(target).then(() => {{
+                                updateRendererSize();
+                                setTimeout(() => fitCameraKeepOrientation(), 80);
+                                setTimeout(() => fitCameraKeepOrientation(), 300);
+                            }}).catch(err => {{
                                 console.error("Fullscreen error: ", err);
                             }});
                         }}
@@ -1322,7 +1841,11 @@ def show_cad_viewer():
                         const doc = (window.parent && window.parent.document) ? window.parent.document : document;
                         const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
                         if (exit) {{
-                            exit.call(doc).catch(err => {{
+                            exit.call(doc).then(() => {{
+                                updateRendererSize();
+                                setTimeout(() => fitCameraKeepOrientation(), 80);
+                                setTimeout(() => fitCameraKeepOrientation(), 300);
+                            }}).catch(err => {{
                                 console.error("Exit fullscreen error: ", err);
                             }});
                         }}
@@ -1332,36 +1855,22 @@ def show_cad_viewer():
 
             const handleFsChange = () => {{
                 try {{
-                    if (!document || !document.body) return;
-                    const isFs = !!(
-                        document.fullscreenElement ||
-                        document.webkitFullscreenElement ||
-                        (window.parent && window.parent.document && (window.parent.document.fullscreenElement || window.parent.document.webkitFullscreenElement))
-                    );
-                    const fsBtn = document.getElementById('fullscreen-btn');
-                    if (isFs) {{
-                        document.body.classList.add('parent-fullscreen');
-                        if (fsBtn) fsBtn.textContent = '🗗 Salir Pantalla';
-                    }} else {{
-                        document.body.classList.remove('parent-fullscreen');
-                        if (fsBtn) fsBtn.textContent = '🖥️ Pantalla Completa';
-                    }}
-                }} catch(e) {{
-                    // Context might be partially destroyed during Streamlit reload
-                }}
+                    updateRendererSize();
+                    fitCameraKeepOrientation();
+                }} catch(e) {{}}
             }};
 
             // Run once on load to initialize state
             handleFsChange();
+            setTimeout(() => handleFsChange(), 80);
+            setTimeout(() => handleFsChange(), 300);
 
             // Listen to fullscreen changes inside our own document
             document.addEventListener('fullscreenchange', () => {{
                 handleFsChange();
-                window.dispatchEvent(new Event('resize'));
             }});
             document.addEventListener('webkitfullscreenchange', () => {{
                 handleFsChange();
-                window.dispatchEvent(new Event('resize'));
             }});
 
             // Register parent document listeners with cleanup to avoid Dead Object errors
@@ -1399,10 +1908,16 @@ def show_cad_viewer():
                 }});
             }}
 
-            // Navigation buttons listeners (directly querying parent window document to trigger Streamlit callbacks)
+            // Navigation buttons listeners (supports direct fullscreen navigation and parent window Streamlit clicks)
             const prevOverlayBtn = document.getElementById('prev-overlay-btn');
             if (prevOverlayBtn) {{
                 prevOverlayBtn.addEventListener('click', () => {{
+                    const directUrl = "{prev_direct_url}";
+                    if (directUrl) {{
+                        if (window.parent && window.parent !== window) window.parent.location.search = directUrl;
+                        else window.location.search = directUrl;
+                        return;
+                    }}
                     try {{
                         const doc = window.parent.document;
                         const buttons = Array.from(doc.querySelectorAll('button'));
@@ -1417,6 +1932,12 @@ def show_cad_viewer():
             const nextOverlayBtn = document.getElementById('next-overlay-btn');
             if (nextOverlayBtn) {{
                 nextOverlayBtn.addEventListener('click', () => {{
+                    const directUrl = "{next_direct_url}";
+                    if (directUrl) {{
+                        if (window.parent && window.parent !== window) window.parent.location.search = directUrl;
+                        else window.location.search = directUrl;
+                        return;
+                    }}
                     try {{
                         const doc = window.parent.document;
                         const buttons = Array.from(doc.querySelectorAll('button'));
@@ -1428,25 +1949,235 @@ def show_cad_viewer():
                 }});
             }}
 
-            // View Preset Button Listeners
+            // View Preset Helper
             function setPresetView(viewName) {{
                 fitCamera(viewName);
             }}
-            
-            const btnIso = document.getElementById('view-iso-btn');
-            if (btnIso) btnIso.addEventListener('click', () => setPresetView('iso'));
-            
-            const btnFront = document.getElementById('view-front-btn');
-            if (btnFront) btnFront.addEventListener('click', () => setPresetView('front'));
-            
-            const btnTop = document.getElementById('view-top-btn');
-            if (btnTop) btnTop.addEventListener('click', () => setPresetView('top'));
-            
-            const btnSide = document.getElementById('view-side-btn');
-            if (btnSide) btnSide.addEventListener('click', () => setPresetView('side'));
-            
-            const btnZoomAll = document.getElementById('zoom-all-btn');
-            if (btnZoomAll) btnZoomAll.addEventListener('click', () => fitCameraKeepOrientation());
+
+            function setActiveSwBtn(activeBtn) {{
+                const btns = [
+                    document.getElementById('btn-view-iso'),
+                    document.getElementById('btn-view-front'),
+                    document.getElementById('btn-view-top'),
+                    document.getElementById('btn-view-side'),
+                    document.getElementById('btn-view-left')
+                ];
+                btns.forEach(b => {{
+                    if (b) b.classList.remove('active');
+                }});
+                if (activeBtn) activeBtn.classList.add('active');
+            }}
+
+            function rotateView90() {{
+                const forward = new THREE.Vector3().subVectors(controls.target, camera.position).normalize();
+                camera.up.applyAxisAngle(forward, Math.PI / 2);
+                camera.updateProjectionMatrix();
+                controls.update();
+                fitCameraKeepOrientation();
+            }}
+
+            function toggleFullscreen() {{
+                const isFs = checkIsFullscreen();
+                if (!isFs) {{
+                    let target = document.documentElement;
+                    if (window.parent && window.parent.document && window.frameElement) {{
+                        target = window.frameElement.closest('div.element-container') || window.frameElement.parentElement || target;
+                    }}
+                    const req = target.requestFullscreen || target.webkitRequestFullscreen || target.msRequestFullscreen;
+                    if (req) {{
+                        req.call(target).then(() => {{
+                            updateRendererSize();
+                            setTimeout(() => fitCameraKeepOrientation(), 80);
+                            setTimeout(() => fitCameraKeepOrientation(), 300);
+                        }}).catch(err => {{
+                            console.error("Fullscreen error: ", err);
+                        }});
+                    }}
+                }} else {{
+                    const doc = (window.parent && window.parent.document) ? window.parent.document : document;
+                    const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+                    if (exit) {{
+                        exit.call(doc).then(() => {{
+                            updateRendererSize();
+                            setTimeout(() => fitCameraKeepOrientation(), 80);
+                            setTimeout(() => fitCameraKeepOrientation(), 300);
+                        }}).catch(err => {{
+                            console.error("Exit fullscreen error: ", err);
+                        }});
+                    }}
+                }}
+            }}
+
+            // ── SolidWorks Heads-Up Toolbar Button Listeners ──
+            const btnZoomFit = document.getElementById('btn-zoom-fit');
+            if (btnZoomFit) btnZoomFit.addEventListener('click', () => fitCameraKeepOrientation());
+
+            const btnSwIso = document.getElementById('btn-view-iso');
+            if (btnSwIso) btnSwIso.addEventListener('click', () => {{ setPresetView('iso'); setActiveSwBtn(btnSwIso); }});
+
+            const btnSwFront = document.getElementById('btn-view-front');
+            if (btnSwFront) btnSwFront.addEventListener('click', () => {{ setPresetView('front'); setActiveSwBtn(btnSwFront); }});
+
+            const btnSwTop = document.getElementById('btn-view-top');
+            if (btnSwTop) btnSwTop.addEventListener('click', () => {{ setPresetView('top'); setActiveSwBtn(btnSwTop); }});
+
+            const btnSwSide = document.getElementById('btn-view-side');
+            if (btnSwSide) btnSwSide.addEventListener('click', () => {{ setPresetView('side'); setActiveSwBtn(btnSwSide); }});
+
+            const btnSwLeft = document.getElementById('btn-view-left');
+            if (btnSwLeft) btnSwLeft.addEventListener('click', () => {{ setPresetView('side_left'); setActiveSwBtn(btnSwLeft); }});
+
+            const btnRotate90 = document.getElementById('btn-rotate-90');
+            if (btnRotate90) btnRotate90.addEventListener('click', () => rotateView90());
+
+            const btnStyleShaded = document.getElementById('btn-style-shaded');
+            const btnStyleWire = document.getElementById('btn-style-wireframe');
+            if (btnStyleShaded) btnStyleShaded.addEventListener('click', () => {{
+                aplicarEstilo('shaded_edges');
+                btnStyleShaded.classList.add('active');
+                if (btnStyleWire) btnStyleWire.classList.remove('active');
+            }});
+            if (btnStyleWire) btnStyleWire.addEventListener('click', () => {{
+                aplicarEstilo('wireframe');
+                btnStyleWire.classList.add('active');
+                if (btnStyleShaded) btnStyleShaded.classList.remove('active');
+            }});
+
+            const btnSwDims = document.getElementById('btn-sw-dims');
+            if (btnSwDims) btnSwDims.addEventListener('click', () => {{
+                if (!dimGroup) return;
+                dimGroup.visible = !dimGroup.visible;
+                if (labelRenderer) labelRenderer.domElement.style.display = dimGroup.visible ? '' : 'none';
+                btnSwDims.classList.toggle('active', dimGroup.visible);
+            }});
+
+            const btnSwGrid = document.getElementById('btn-sw-grid');
+            if (btnSwGrid) btnSwGrid.addEventListener('click', () => {{
+                gridHelper.visible = !gridHelper.visible;
+                btnSwGrid.classList.toggle('active', gridHelper.visible);
+            }});
+
+            const btnSwSnapshot = document.getElementById('btn-sw-snapshot');
+            if (btnSwSnapshot) btnSwSnapshot.addEventListener('click', () => copyPieceSnapshot(btnSwSnapshot));
+
+            const btnSwFullscreen = document.getElementById('btn-sw-fullscreen');
+            if (btnSwFullscreen) btnSwFullscreen.addEventListener('click', () => toggleFullscreen());
+
+            // ─── Toggle minimizar / expandir Ficha HUD ───
+            const btnToggleHud = document.getElementById('btn-toggle-hud');
+            const hudBody = document.getElementById('hud-body');
+            if (btnToggleHud && hudBody) {{
+                btnToggleHud.addEventListener('click', () => {{
+                    const isCollapsed = hudBody.style.display === 'none';
+                    hudBody.style.display = isCollapsed ? 'block' : 'none';
+                    btnToggleHud.textContent = isCollapsed ? '−' : '+';
+                    btnToggleHud.title = isCollapsed ? 'Minimizar Ficha' : 'Expandir Ficha';
+                }});
+            }}
+
+            // ─── Copiar Pantalla / Captura al Portapapeles ──────────────────────────────
+            const bgDataUri = "{bg_data_uri}";
+
+            function copyPieceSnapshot(btn) {{
+                if (!renderer || !scene || !camera) return;
+                if (btn) btn.style.opacity = '0.6';
+                
+                try {{
+                    // Renderizar escena actual explícitamente
+                    renderer.render(scene, camera);
+                    
+                    const handleBlob = async (blob) => {{
+                        if (!blob) {{
+                            if (btn) btn.style.opacity = '1';
+                            return;
+                        }}
+                        
+                        let copied = false;
+                        if (navigator.clipboard && navigator.clipboard.write) {{
+                            try {{
+                                const item = new ClipboardItem({{ 'image/png': blob }});
+                                await navigator.clipboard.write([item]);
+                                copied = true;
+                                if (btn) {{
+                                    btn.style.background = '#16a34a';
+                                    btn.title = '✅ ¡Captura con fondo Sigrama copiada al portapapeles!';
+                                }}
+                                setTimeout(() => {{
+                                    if (btn) {{
+                                        btn.style.background = '';
+                                        btn.style.opacity = '1';
+                                        btn.title = '📸 Copiar Captura al Portapapeles (Ctrl+V)';
+                                    }}
+                                }}, 1800);
+                            }} catch (clipErr) {{
+                                console.warn("Clipboard API write rejected:", clipErr);
+                            }}
+                        }}
+                        
+                        if (!copied) {{
+                            // Fallback de descarga directa si el navegador restringe el portapapeles
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            const cleanName = "{sku_for_overlay}".replace(/[^a-zA-Z0-9_.-]/g, '_') || 'captura_3d';
+                            link.download = `captura_${{cleanName}}.png`;
+                            link.href = url;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                            if (btn) {{
+                                btn.style.background = '#0284c7';
+                                btn.title = '💾 ¡Imagen descargada!';
+                            }}
+                            setTimeout(() => {{
+                                if (btn) {{
+                                    btn.style.background = '';
+                                    btn.style.opacity = '1';
+                                    btn.title = '📸 Copiar Captura al Portapapeles (Ctrl+V)';
+                                }}
+                            }}, 1800);
+                        }}
+                    }};
+
+                    if (bgDataUri && bgDataUri.length > 50) {{
+                        const bgImg = new Image();
+                        bgImg.onload = function() {{
+                            try {{
+                                const offCanvas = document.createElement('canvas');
+                                offCanvas.width = renderer.domElement.width;
+                                offCanvas.height = renderer.domElement.height;
+                                const ctx = offCanvas.getContext('2d');
+                                
+                                const cw = offCanvas.width;
+                                const ch = offCanvas.height;
+                                const iw = bgImg.naturalWidth || bgImg.width;
+                                const ih = bgImg.naturalHeight || bgImg.height;
+                                const scale = Math.max(cw / iw, ch / ih);
+                                const sw = iw * scale;
+                                const sh = ih * scale;
+                                const ox = (cw - sw) / 2;
+                                const oy = (ch - sh) / 2;
+                                
+                                ctx.fillStyle = '#f8fafc';
+                                ctx.fillRect(0, 0, cw, ch);
+                                ctx.drawImage(bgImg, ox, oy, sw, sh);
+                                ctx.drawImage(renderer.domElement, 0, 0);
+                                
+                                offCanvas.toBlob(handleBlob, 'image/png');
+                            }} catch(e) {{
+                                renderer.domElement.toBlob(handleBlob, 'image/png');
+                            }}
+                        }};
+                        bgImg.onerror = function() {{
+                            renderer.domElement.toBlob(handleBlob, 'image/png');
+                        }};
+                        bgImg.src = bgDataUri;
+                    }} else {{
+                        renderer.domElement.toBlob(handleBlob, 'image/png');
+                    }}
+                }} catch (err) {{
+                    console.error("Snapshot error:", err);
+                    if (btn) btn.style.opacity = '1';
+                }}
+            }}
             
             // ─── COMSOL-style Dimension Annotations ───────────────────────────────────
             // Draws 3 bounding-box dimension lines (X/Y/Z) with arrow cones and 2D labels.
@@ -1562,6 +2293,11 @@ def show_cad_viewer():
             </div>""",
             unsafe_allow_html=True
         )
+    if direct_fullscreen:
+        components.html(html_code, height=980, scrolling=False)
+        return
+    if embed_mode:
+        components.html(html_code, height=height, scrolling=False)
         return
 
     col3d, colpdf = st.columns([3, 2])
@@ -1634,9 +2370,10 @@ def show_cad_viewer():
         """, unsafe_allow_html=True)
         
         # Navigation buttons below the interactive view
-        if len(only_pieces) > 0:
-            def update_piece(sku):
-                st.session_state["cad_piece_select"] = sku
+        if len(filtered_labels) > 0:
+            def update_piece(target_label):
+                if target_label:
+                    st.session_state["cad_piece_select"] = target_label
 
             nav_col1, nav_col2, nav_col3 = st.columns([1, 1, 1])
             
@@ -1824,3 +2561,6 @@ def show_cad_viewer():
             mime="application/pdf",
             key="btn_download_cad_pdf_blue"
         )
+
+def render_cad_viewer_embedded(embed_piece, height=440):
+    return show_cad_viewer(direct_fullscreen=False, embed_mode=True, embed_piece=embed_piece, height=height)

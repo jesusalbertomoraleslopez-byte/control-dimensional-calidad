@@ -5,6 +5,9 @@ from src.database import get_connection
 from src.pdf_generator import generate_first_piece_pdf
 
 def show_engineering_reports():
+    from src.views.v0_hub import render_header_back_to_hub
+    render_header_back_to_hub("3.3_engineering_reports")
+
     st.title("3.3. Impresión de Reportes de Ingeniería")
     st.subheader("Centro de Consulta de Planos y Descarga de Archivos Nativos")
     
@@ -23,7 +26,11 @@ def show_engineering_reports():
         
     # Selection of Piece
     sku_list = df_pieces["nombre_sku"].tolist()
-    selected_sku = st.selectbox("Seleccione el SKU del Componente:", sku_list)
+    default_eng_idx = 0
+    target_sku_eng = st.session_state.get("hub_selected_sku")
+    if target_sku_eng and target_sku_eng in sku_list:
+        default_eng_idx = sku_list.index(target_sku_eng)
+    selected_sku = st.selectbox("Seleccione el SKU del Componente:", sku_list, index=default_eng_idx)
     
     if selected_sku:
         # Get piece data

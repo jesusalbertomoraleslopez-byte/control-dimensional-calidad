@@ -7,6 +7,9 @@ from src.pdf_generator import generate_excel_spc_report_pdf, generate_spc_lote_p
 from src.utils import calculate_spc_stats
 
 def show_quality_reports():
+    from src.views.v0_hub import render_header_back_to_hub
+    render_header_back_to_hub("4.4_quality_reports")
+
     st.title("4.4. Impresión de Reportes de Calidad")
     st.subheader("Consola Central de Reportes SPC y Liberaciones de Calidad")
     

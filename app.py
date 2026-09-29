@@ -297,7 +297,7 @@ BANNER_PATH = os.path.join(os.path.dirname(__file__), "banner_app.png")
 
 def show_banner():
     if os.path.exists(BANNER_PATH):
-        st.image(BANNER_PATH)
+        st.image(BANNER_PATH, use_container_width=True)
     else:
         # Fallback stylized banner in case file is missing (using Pantone Black 7 C & Pantone 485 C)
         st.markdown("""
@@ -335,6 +335,21 @@ try:
             st.session_state["role"] = "Operador"
 except Exception:
     pass
+
+# Auto-bypass login if fullscreen CAD inspection mode is requested
+if st.query_params.get("fullscreen") == "cad":
+    st.session_state["logged_in"] = True
+    if "role" not in st.session_state or not st.session_state["role"]:
+        st.session_state["role"] = "Operador"
+    st.session_state["user"] = st.session_state.get("user") or "Operador de Planta"
+    st.session_state["nombre_completo"] = st.session_state.get("nombre_completo") or "Operador de Inspección"
+    
+    target_sku = st.query_params.get("sku", "")
+    target_pieza = st.query_params.get("pieza", "")
+    
+    import src.views.v3_control.v3_1_cad_viewer as cad_view
+    cad_view.show_cad_viewer(direct_fullscreen=True, target_sku=target_sku, target_pieza=target_pieza)
+    st.stop()
 
 if not st.session_state["logged_in"]:
     show_banner()
@@ -384,7 +399,7 @@ else:
     st.sidebar.markdown("### 📌 MENÚ DE NAVEGACIÓN")
     
     menu_options = [
-        "1. Dashboard Principal",
+        "1. Página Principal (Centro de Control)",
         "2. Área de Consulta",
         "3. Ingeniería",
         "   3.1 Carga de Registros de Diseño",
@@ -409,7 +424,22 @@ else:
             "   7.5 Sistema de Gestión de Calidad (SGC) (Oculto solo Administrador)"
         ])
     
-    choice = st.sidebar.radio("Ir a la sección:", menu_options, label_visibility="collapsed")
+    if "nav_menu_selection" not in st.session_state:
+        st.session_state["nav_menu_selection"] = "1. Página Principal (Centro de Control)"
+
+    if "redirect_to_page" in st.session_state:
+        target = st.session_state.pop("redirect_to_page")
+        if target in menu_options:
+            st.session_state["nav_menu_selection"] = target
+
+    if st.query_params.get("menu") == "consulta" and "2. Área de Consulta" in menu_options:
+        st.session_state["nav_menu_selection"] = "2. Área de Consulta"
+
+    current_idx = 0
+    if st.session_state.get("nav_menu_selection") in menu_options:
+        current_idx = menu_options.index(st.session_state["nav_menu_selection"])
+
+    choice = st.sidebar.radio("Ir a la sección:", menu_options, index=current_idx, key="nav_menu_selection", label_visibility="collapsed")
     
     st.sidebar.markdown("---")
     if st.sidebar.button("Cerrar Sesión", key="logout_btn"):
@@ -433,10 +463,10 @@ else:
         
     # Route Content
     import importlib
-    if choice == "1. Dashboard Principal":
-        import src.views.v1_dashboard
-        importlib.reload(src.views.v1_dashboard)
-        src.views.v1_dashboard.show_dashboard()
+    if choice == "1. Página Principal (Centro de Control)":
+        import src.views.v0_hub
+        importlib.reload(src.views.v0_hub)
+        src.views.v0_hub.show_hub()
     elif choice == "2. Área de Consulta":
         import src.views.v2_consulta
         importlib.reload(src.views.v2_consulta)

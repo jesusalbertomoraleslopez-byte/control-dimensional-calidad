@@ -17,6 +17,9 @@ from openpyxl.utils import get_column_letter
 from src.views.v3_control.v3_4_spc_excel import format_tolerance, apply_excel_template_styling, generate_excel_template_empty, generate_custom_excel_template
 
 def show_spc_excel():
+    from src.views.v0_hub import render_header_back_to_hub
+    render_header_back_to_hub("3.2_capture_excel")
+
     st.title("3.2. Carga e Importación de Inspección (Excel)")
     st.subheader("Carga Dinámica de Mediciones de Corte Láser y Doblez")
 
@@ -38,7 +41,11 @@ def show_spc_excel():
         piece_material = "16ga"
     else:
         piece_options = [r["nombre_sku"] for r in pieces]
-        sku_selected = st.selectbox("Seleccione el SKU asociado:", piece_options)
+        default_sku_idx = 0
+        target_sku_cap = st.session_state.get("selected_sku_capture")
+        if target_sku_cap and target_sku_cap in piece_options:
+            default_sku_idx = piece_options.index(target_sku_cap)
+        sku_selected = st.selectbox("Seleccione el SKU asociado:", piece_options, index=default_sku_idx)
         piece_row = [r for r in pieces if r["nombre_sku"] == sku_selected][0]
         piece_id = piece_row["id"]
         dest_dir = piece_row["ruta_almacenamiento"]
