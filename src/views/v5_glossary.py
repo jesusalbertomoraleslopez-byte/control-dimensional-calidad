@@ -2,11 +2,15 @@ import streamlit as st
 import pandas as pd
 import io
 import os
-import docx
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import parse_xml
-from docx.oxml.ns import nsdecls
+try:
+    import docx
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+    HAS_DOCX = True
+except ImportError:
+    HAS_DOCX = False
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -16,6 +20,8 @@ from src.pdf_generator import NumberedCanvas
 from src.database import get_connection
 
 def generate_glossary_docx(codigo, nombre, asociado) -> bytes:
+    if not HAS_DOCX:
+        return b""
     doc = docx.Document()
     
     # Page setup (Margins)
@@ -269,6 +275,9 @@ def generate_glossary_pdf(codigo, nombre, asociado) -> bytes:
     return pdf_bytes
 
 def show_glossary():
+    from src.views.v0_hub import render_header_back_to_hub
+    render_header_back_to_hub("7.4_glossary")
+
     st.title("Glosario de Documentación de Calidad")
     st.subheader("Borradores en Revisión por el SGC (Códigos Pendientes de Asignación)")
     
