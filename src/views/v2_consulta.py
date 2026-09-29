@@ -234,10 +234,12 @@ def show_consulta():
 
     with nav_col3:
         # Selector de búsqueda rápida con autocompletado
-        piezas_options = [
-            f"[{r.get('consecutivo_ing') or f'ID-{r['id']}'}] {r['numero_pieza']} — {r.get('version','V0')}-{r.get('revision','R0')}"
-            for _, r in df_piezas.iterrows()
-        ]
+        piezas_options = []
+        for _, r in df_piezas.iterrows():
+            tag = r.get("consecutivo_ing") or f"ID-{r.get('id', '')}"
+            ver = f"{r.get('version','V0')}-{r.get('revision','R0')}"
+            num_p = r.get("numero_pieza") or ""
+            piezas_options.append(f"[{tag}] {num_p} — {ver}")
         selected_option = st.selectbox(
             "Seleccionar Pieza:",
             options=piezas_options,

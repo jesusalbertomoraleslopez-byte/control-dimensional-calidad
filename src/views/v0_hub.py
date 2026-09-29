@@ -408,10 +408,12 @@ def show_hub():
                 st.session_state["hub_current_piece_id"] = new_piece_id
                 st.rerun()
         with p_c2:
-            piezas_options = [
-                f"{r['numero_pieza']} ({r.get('consecutivo_ing') or f'ID-{r['id']}'})"
-                for _, r in df_display.iterrows()
-            ]
+            piezas_options = []
+            for _, r in df_display.iterrows():
+                tag = r.get("consecutivo_ing") or f"ID-{r.get('id', '')}"
+                num_p = r.get("numero_pieza") or ""
+                piezas_options.append(f"{num_p} ({tag})")
+
             selected_option = st.selectbox(
                 "Seleccionar Pieza:",
                 options=piezas_options,
