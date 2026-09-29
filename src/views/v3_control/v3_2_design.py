@@ -40,6 +40,461 @@ def validate_step_file(step_path) -> bool:
     except Exception:
         return False
 
+def build_audit_data_from_db(db_rows):
+    scanned = []
+    for r in db_rows:
+        p = dict(r)
+        def _has_f(val):
+            if val is None or pd.isna(val):
+                return False
+            s = str(val).strip().lower()
+            return s not in ("none", "nan", "null", "")
+
+        has_orig = _has_f(p.get("archivo_dibujo_original"))
+        has_ctrl = _has_f(p.get("archivo_plano_control"))
+        has_dxf = _has_f(p.get("archivo_dxf"))
+        has_slddrw = _has_f(p.get("archivo_plano_nativo_3d"))
+        has_sldprt = _has_f(p.get("archivo_dibujo_nativo_2d"))
+        has_step = _has_f(p.get("archivo_step"))
+        has_xlsx = _has_f(p.get("archivo_excel_resumen"))
+
+        missing = []
+        if not (has_ctrl or has_orig): missing.append("Plano PDF")
+        if not has_dxf: missing.append("DXF")
+        if not has_step: missing.append("Modelo STEP")
+        if not has_xlsx: missing.append("Excel Tolerancias")
+        if not (has_slddrw or has_sldprt): missing.append("Nativo SolidWorks")
+
+        is_complete = (has_ctrl or has_orig) and has_dxf and has_step and has_xlsx
+
+        scanned.append({
+            "Carpeta": p.get("consecutivo_ing") or p.get("numero_pieza") or "S/N",
+            "SKU Detectado": p.get("nombre_sku") or p.get("numero_pieza"),
+            "Dibujo PDF": "🟢 Encontrado" if has_orig else "🔴 Faltante",
+            "DXF": "🟢 Encontrado" if has_dxf else "🔴 Faltante",
+            "Plano Control": "🟢 Encontrado" if has_ctrl else "🔴 Faltante",
+            "Plano 3D": "🟢 Encontrado" if has_slddrw else "🔴 Faltante",
+            "Dibujo 2D": "🟢 Encontrado" if has_sldprt else "🔴 Faltante",
+            "Plano STEP": "🟢 Encontrado" if has_step else "🔴 Faltante",
+            "Excel Resumen": "🟢 Encontrado" if has_xlsx else "🔴 Faltante",
+            "Estatus": "Listo" if is_complete else "Incompleto",
+            "Estatus Visual": "🟢 Completo" if is_complete else "🔴 Incompleto",
+            "Detalle Pendientes": "✔ Expediente Completo" if is_complete else ("Falta: " + ", ".join(missing)),
+            "ready": is_complete,
+            "auditoria_status": p.get("estatus_auditoria") or "Sin Auditar",
+            "id": p.get("id"),
+            "parsed": {
+                "part_no": p.get("numero_pieza", ""),
+                "material": p.get("material", ""),
+                "finish": p.get("acabado_estandar", ""),
+                "k_factor": p.get("factor_k", ""),
+                "version": p.get("version", ""),
+                "revision": p.get("revision", "")
+            },
+            "files": {
+                "pdf_orig": p.get("archivo_dibujo_original") if has_orig else None,
+                "dxf": p.get("archivo_dxf") if has_dxf else None,
+                "control_pdf": p.get("archivo_plano_control") if has_ctrl else None,
+                "slddrw": p.get("archivo_plano_nativo_3d") if has_slddrw else None,
+                "sldprt": p.get("archivo_dibujo_nativo_2d") if has_sldprt else None,
+                "step": p.get("archivo_step") if has_step else None,
+                "xlsx": p.get("archivo_excel_resumen") if has_xlsx else None,
+                "plano_validado": p.get("plano_validado_impreso"),
+                "vobo_pdf": p.get("documento_primera_pieza")
+            }
+        })
+    return scanned
+
+def render_audit_matrix_table(cursor):
+    cursor.execute("SELECT * FROM piezas ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku")
+    all_db_rows = cursor.fetchall()
+    scanned_rows = build_audit_data_from_db(all_db_rows)
+
+    total_detected = len(scanned_rows)
+    total_ready = sum(1 for r in scanned_rows if r.get("ready"))
+    total_pending = total_detected - total_ready
+    pct_ready = (total_ready / total_detected * 100.0) if total_detected > 0 else 0.0
+
+    audit_excel_bytes = generate_bulk_audit_excel(scanned_rows, "Catálogo General de Piezas - Planta SIGRAMA")
+    audit_filename = f"Auditoria_Ingenieria_Faltantes_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+
+    # Banner de Descarga Oficial para Ingeniería
+    top_dl_col1, top_dl_col2 = st.columns([2.5, 1.2])
+    with top_dl_col1:
+        st.markdown("""
+        <div style="background-color: #F8F9FA; border-left: 5px solid #EC2024; border: 1px solid #D2D3D5; border-radius: 6px; padding: 0.8rem 1rem;">
+            <span style="font-family: 'Montserrat', sans-serif; font-weight: 800; color: #111111; font-size: 1.05rem;">
+                📊 Reporte Oficial de Auditoría y Pendientes para Ingeniería (Excel a Color)
+            </span>
+            <p style="font-family: 'Questrial', sans-serif; font-size: 0.85rem; color: #64748b; margin: 0.2rem 0 0 0;">
+                Descarga el informe completo con colores (🟢 Verde = Encontrado, 🔴 Rojo = Faltante) y la pestaña exclusiva <b>'Solo Pendientes (Ingeniería)'</b> con el plan de trabajo detallado para que el equipo complete la información técnica faltante.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with top_dl_col2:
+        st.markdown("<div style='margin-top: 4px;'></div>", unsafe_allow_html=True)
+        st.download_button(
+            label="📥 DESCARGAR AUDITORÍA EN EXCEL",
+            data=audit_excel_bytes,
+            file_name=audit_filename,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Descargar archivo Excel con formato condicional y pestaña de solo pendientes",
+            key="btn_dl_audit_excel_tab1",
+            type="primary",
+            use_container_width=True
+        )
+
+    st.markdown("<div style='margin-top: 0.8rem;'></div>", unsafe_allow_html=True)
+
+    # KPI Cards
+    k_col1, k_col2, k_col3, k_col4 = st.columns(4)
+    with k_col1:
+        st.metric("Total Diseños Analizados", f"{total_detected}")
+    with k_col2:
+        st.metric("Expedientes Completos", f"{total_ready}", delta="Listos para Producción", delta_color="normal")
+    with k_col3:
+        st.metric("Con Faltantes de Información", f"{total_pending}", delta="Requiere Acción Ingeniería", delta_color="inverse")
+    with k_col4:
+        st.metric("Índice de Integridad", f"{pct_ready:.1f}%")
+
+    st.markdown("---")
+
+    # Filtros interactivos de la Tabla
+    f_c1, f_c2, f_c3 = st.columns([1.2, 1.2, 2])
+    with f_c1:
+        f_integridad = st.selectbox(
+            "Filtrar por Documentación:",
+            ["📋 Todos los Diseños", "⚠️ Solo con Faltantes (Pendientes)", "🟢 Solo Completos"],
+            key="filter_matrix_integridad"
+        )
+    with f_c2:
+        f_auditoria = st.selectbox(
+            "Filtrar por Aprobación:",
+            ["Todos los Estatus", "🔴 Sin Auditar", "🟢 Auditadas"],
+            key="filter_matrix_auditoria"
+        )
+    with f_c3:
+        f_busq = st.text_input(
+            "🔎 Buscar en la Matriz de Auditoría:",
+            placeholder="Escribe consecutivo, No. Pieza o SKU...",
+            key="filter_matrix_search"
+        )
+
+    # Aplicar filtros
+    filtered_matrix = scanned_rows
+    if "Solo con Faltantes" in f_integridad:
+        filtered_matrix = [r for r in filtered_matrix if not r.get("ready")]
+    elif "Solo Completos" in f_integridad:
+        filtered_matrix = [r for r in filtered_matrix if r.get("ready")]
+
+    if "Sin Auditar" in f_auditoria:
+        filtered_matrix = [r for r in filtered_matrix if r.get("auditoria_status") != "Auditada"]
+    elif "Auditadas" in f_auditoria:
+        filtered_matrix = [r for r in filtered_matrix if r.get("auditoria_status") == "Auditada"]
+
+    if f_busq.strip():
+        bq = f_busq.strip().lower()
+        filtered_matrix = [
+            r for r in filtered_matrix
+            if bq in str(r.get("Carpeta", "")).lower()
+            or bq in str(r.get("SKU Detectado", "")).lower()
+            or bq in str(r.get("Detalle Pendientes", "")).lower()
+        ]
+
+    st.markdown(f"##### 📋 Listado de Diseños y Documentación Técnica ({len(filtered_matrix)} piezas)")
+
+    df_matrix = pd.DataFrame([
+        {
+            "Carpeta": r["Carpeta"],
+            "SKU Detectado": r["SKU Detectado"],
+            "Plano Control": r["Plano Control"],
+            "Dibujo PDF": r["Dibujo PDF"],
+            "DXF": r["DXF"],
+            "Plano 3D": r["Plano 3D"],
+            "Dibujo 2D": r["Dibujo 2D"],
+            "Plano STEP": r["Plano STEP"],
+            "Excel Resumen": r["Excel Resumen"],
+            "Estatus": r["Estatus Visual"],
+            "Detalle de Pendientes": r["Detalle Pendientes"]
+        }
+        for r in filtered_matrix
+    ])
+
+    st.dataframe(
+        df_matrix,
+        use_container_width=True,
+        height=520,
+        column_config={
+            "Carpeta": st.column_config.TextColumn("Consecutivo / Carpeta", width="medium"),
+            "SKU Detectado": st.column_config.TextColumn("SKU Oficial", width="large"),
+            "Plano Control": st.column_config.TextColumn("Plano Control", width="small"),
+            "Dibujo PDF": st.column_config.TextColumn("Dibujo PDF", width="small"),
+            "DXF": st.column_config.TextColumn("DXF Láser", width="small"),
+            "Plano 3D": st.column_config.TextColumn("SLDDRW", width="small"),
+            "Dibujo 2D": st.column_config.TextColumn("SLDPRT", width="small"),
+            "Plano STEP": st.column_config.TextColumn("STEP 3D", width="small"),
+            "Excel Resumen": st.column_config.TextColumn("Excel", width="small"),
+            "Estatus": st.column_config.TextColumn("Estatus", width="small"),
+            "Detalle de Pendientes": st.column_config.TextColumn("Detalle de Acción para Ingeniería", width="large")
+        }
+    )
+
+def render_individual_piece_audit(cursor, conn, cnt_sin_auditar, cnt_auditadas, cnt_total):
+    # 2. Filtros de Búsqueda y Selección
+    fcol_stat, fcol_search = st.columns([1, 2])
+    with fcol_stat:
+        status_filter = st.selectbox(
+            "Filtrar Catálogo:",
+            [f"🔴 Sin Auditar ({cnt_sin_auditar})", f"🟢 Auditadas ({cnt_auditadas})", f"📋 Todas ({cnt_total})"],
+            key="audit_status_filter"
+        )
+    with fcol_search:
+        audit_search = st.text_input(
+            "🔎 Buscar por Consecutivo ING, No. Pieza o SKU:",
+            placeholder="Ej: ING0010 ó 12-A-6199 ó PP21340",
+            key="audit_search_input"
+        )
+
+    # Construir consulta dinámica
+    where_clauses = []
+    params = []
+    if "🔴 Sin Auditar" in status_filter:
+        where_clauses.append("(estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL)")
+    elif "🟢 Auditadas" in status_filter:
+        where_clauses.append("estatus_auditoria = 'Auditada'")
+
+    if audit_search.strip():
+        where_clauses.append("(consecutivo_ing LIKE ? OR numero_pieza LIKE ? OR nombre_sku LIKE ?)")
+        q_like = f"%{audit_search.strip()}%"
+        params.extend([q_like, q_like, q_like])
+
+    query = "SELECT * FROM piezas"
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
+    query += " ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku"
+
+    cursor.execute(query, tuple(params))
+    audit_rows = [dict(r) for r in cursor.fetchall()]
+
+    if not audit_rows:
+        st.info("ℹ️ No se encontraron piezas que coincidan con los filtros seleccionados.")
+    else:
+        def audit_label(p):
+            ing = p.get("consecutivo_ing") or "S/C"
+            status_icon = "🟢" if p.get("estatus_auditoria") == "Auditada" else "🔴"
+            return f"{status_icon} [{ing}] {p['nombre_sku']}"
+
+        audit_map = {audit_label(p): p for p in audit_rows}
+        selected_audit_label = st.selectbox(
+            f"Seleccione la Pieza a Auditar ({len(audit_rows)} mostradas):",
+            list(audit_map.keys()),
+            key="audit_selected_piece_box"
+        )
+        p_sel = audit_map[selected_audit_label]
+
+        # Ficha de la pieza
+        st.markdown(f"""
+        <div style="background:#F8F9FA; border:1px solid #D2D3D5; border-radius:8px; padding:1.2rem; margin:1rem 0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+                <span style="font-family:'Montserrat',sans-serif; font-size:1.3rem; font-weight:800; color:#111111;">
+                    [{p_sel.get('consecutivo_ing') or 'S/C'}] {p_sel['nombre_sku']}
+                </span>
+                <span style="background:{'#16a34a' if p_sel.get('estatus_auditoria')=='Auditada' else '#dc2626'}; color:#fff; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:0.85rem;">
+                    {p_sel.get('estatus_auditoria', 'Sin Auditar')}
+                </span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:1.5rem; font-size:0.9rem; color:#4B5563;">
+                <span>📌 <b>No. Pieza:</b> {p_sel['numero_pieza']}</span>
+                <span>🧱 <b>Material:</b> {p_sel['material']}</span>
+                <span>📏 <b>Espesor:</b> {p_sel['espesor_materia_prima']:.4f} in</span>
+                <span>📐 <b>Dimensiones:</b> {p_sel['largo_materia_prima']:.3f} x {p_sel['ancho_materia_prima']:.3f} in</span>
+                <span>🎨 <b>Acabado:</b> {p_sel['acabado_estandar']}</span>
+                <span>🔖 <b>Factor K:</b> {p_sel['factor_k']}</span>
+                <span>📋 <b>Versión:</b> {p_sel['version']}-{p_sel['revision']}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Checklist de Documentos Requeridos
+        st.markdown("##### 📋 Checklist de Documentación de Ingeniería")
+        from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
+
+        docs = [
+            ("Plano de Control SIGRAMA (PDF)", p_sel.get("archivo_plano_control"), "application/pdf"),
+            ("Plano Original del Cliente (PDF)", p_sel.get("archivo_dibujo_original"), "application/pdf"),
+            ("Archivo de Corte Láser (DXF)", p_sel.get("archivo_dxf"), "application/dxf"),
+            ("Modelo 3D de Intercambio (STEP)", p_sel.get("archivo_step"), "application/octet-stream"),
+            ("Modelo 3D SolidWorks (SLDPRT)", p_sel.get("archivo_plano_nativo_3d"), "application/octet-stream"),
+            ("Dibujo 2D SolidWorks (SLDDRW)", p_sel.get("archivo_dibujo_nativo_2d"), "application/octet-stream"),
+            ("Hoja de Especificaciones / Tolerancias (Excel)", p_sel.get("archivo_excel_resumen"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ("Plano Validado Firmado (PDF)", p_sel.get("plano_validado_impreso"), "application/pdf"),
+            ("Evidencia / VoBo Primera Pieza (PDF)", p_sel.get("documento_primera_pieza"), "application/pdf"),
+        ]
+
+        doc_cols = st.columns(3)
+        for idx, (doc_name, doc_path, doc_mime) in enumerate(docs):
+            with doc_cols[idx % 3]:
+                has_doc = False
+                f_bytes = None
+                if doc_path:
+                    f_bytes = get_file_bytes(doc_path)
+                    has_doc = f_bytes is not None and len(f_bytes) > 0
+                
+                if has_doc:
+                    st.markdown(f"**✅ {doc_name}**")
+                    clean_fn = os.path.basename(str(doc_path).replace('\\', '/').split('?')[0])
+                    st.download_button(
+                        label="📥 Descargar",
+                        data=f_bytes,
+                        file_name=clean_fn,
+                        mime=doc_mime,
+                        key=f"btn_dl_audit_{idx}_{p_sel['id']}",
+                        use_container_width=True
+                    )
+                else:
+                    st.markdown(f"**❌ {doc_name}**")
+                    st.caption("No registrado")
+
+        st.markdown("---")
+
+        # Vista Previa del Plano de Control
+        st.markdown("##### 📄 Vista Previa del Plano de Control")
+        preview_pdf_path = p_sel.get("archivo_plano_control") or p_sel.get("archivo_dibujo_original")
+        preview_bytes = get_file_bytes(preview_pdf_path) if preview_pdf_path else None
+
+        if preview_bytes:
+            import base64
+            pdf_b64 = base64.b64encode(preview_bytes).decode("utf-8")
+            pdfjs_audit_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <style>
+                * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+                body {{ background: #525659; overflow-y: auto; height: 420px; }}
+                #pdf-wrapper {{ display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px; }}
+                canvas {{ display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.5); max-width: 100%; }}
+                #pdf-loading {{ color: #94a3b8; font-size: 14px; padding: 2rem; text-align: center; }}
+              </style>
+              <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+            </head>
+            <body>
+              <div id="pdf-wrapper"><div id="pdf-loading">⏳ Cargando plano de control...</div></div>
+              <script>
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                const raw = atob("{pdf_b64}");
+                const uint8 = new Uint8Array(raw.length);
+                for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+                pdfjsLib.getDocument({{ data: uint8 }}).promise.then(pdf => {{
+                  document.getElementById('pdf-loading').remove();
+                  const renderPage = (num) => {{
+                    pdf.getPage(num).then(page => {{
+                      const vp0 = page.getViewport({{ scale: 1 }});
+                      const wrapper = document.getElementById('pdf-wrapper');
+                      const scale = (wrapper.clientWidth - 20) / vp0.width;
+                      const viewport = page.getViewport({{ scale }});
+                      const canvas = document.createElement('canvas');
+                      canvas.width = viewport.width; canvas.height = viewport.height;
+                      wrapper.appendChild(canvas);
+                      page.render({{ canvasContext: canvas.getContext('2d'), viewport }});
+                      if (num < pdf.numPages) renderPage(num + 1);
+                    }});
+                  }};
+                  renderPage(1);
+                }});
+              </script>
+            </body>
+            </html>
+            """
+            components.html(pdfjs_audit_html, height=440, scrolling=False)
+        else:
+            st.warning("⚠️ No se encontró el archivo PDF del plano para generar vista previa.")
+
+        st.markdown("---")
+
+        # Formulario de Dictamen del Administrador
+        st.markdown("##### ✍️ Dictamen y Aprobación del Administrador")
+        audit_notes = st.text_area(
+            "Notas u Observaciones de la Auditoría:",
+            value=p_sel.get("auditoria_notas") or "",
+            placeholder="Indique si el plano cumple tolerancias, especificaciones de corte y doblez, o motivos de rechazo.",
+            key=f"notes_audit_{p_sel['id']}"
+        )
+
+        col_act1, col_act2, col_act3 = st.columns([2, 1, 1])
+        with col_act1:
+            btn_approve = st.button(
+                "✅ Auditar y Aprobar Pieza (Habilitar en Visor 3D CAD)",
+                type="primary",
+                use_container_width=True,
+                key=f"btn_approve_audit_{p_sel['id']}"
+            )
+        with col_act2:
+            btn_reject = st.button(
+                "⚠️ Rechazar / Observaciones",
+                use_container_width=True,
+                key=f"btn_reject_audit_{p_sel['id']}"
+            )
+        with col_act3:
+            btn_reset = st.button(
+                "🔄 Marcar 'Sin Auditar'",
+                use_container_width=True,
+                key=f"btn_reset_audit_{p_sel['id']}"
+            )
+
+        if btn_approve:
+            admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
+            cursor.execute("""
+                UPDATE piezas SET
+                    estatus_auditoria = 'Auditada',
+                    fecha_auditoria = CURRENT_TIMESTAMP,
+                    auditor_nombre = ?,
+                    auditoria_notas = ?
+                WHERE id = ?
+            """, (admin_name, audit_notes, p_sel["id"]))
+            conn.commit()
+            from src.database import save_database_to_gcs
+            save_database_to_gcs()
+            st.success(f"🎉 ¡Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' auditada y aprobada con éxito! Ahora está disponible en el 3.1. Visualizador 3D CAD.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+        elif btn_reject:
+            admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
+            cursor.execute("""
+                UPDATE piezas SET
+                    estatus_auditoria = 'Rechazada',
+                    fecha_auditoria = CURRENT_TIMESTAMP,
+                    auditor_nombre = ?,
+                    auditoria_notas = ?
+                WHERE id = ?
+            """, (admin_name, audit_notes, p_sel["id"]))
+            conn.commit()
+            from src.database import save_database_to_gcs
+            save_database_to_gcs()
+            st.warning(f"⚠️ Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' marcada como Rechazada con observaciones.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
+        elif btn_reset:
+            cursor.execute("""
+                UPDATE piezas SET
+                    estatus_auditoria = 'Sin Auditar',
+                    fecha_auditoria = NULL,
+                    auditor_nombre = NULL
+                WHERE id = ?
+            """, (p_sel["id"],))
+            conn.commit()
+            from src.database import save_database_to_gcs
+            save_database_to_gcs()
+            st.info(f"Pieza restablecida a 'Sin Auditar'.")
+            import time
+            time.sleep(1)
+            st.rerun()
+
 def show_design_loader():
     from src.views.v0_hub import render_header_back_to_hub
     render_header_back_to_hub("3.2_design")
@@ -136,262 +591,16 @@ def show_design_loader():
                     st.rerun()
 
         st.markdown("---")
+        sub_tab_matrix, sub_tab_single = st.tabs([
+            "📋 Matriz General de Auditoría y Reporte de Faltantes (Excel)",
+            "🔍 Auditoría y Validación Individual por Pieza"
+        ])
 
-        # 2. Filtros de Búsqueda y Selección
-        fcol_stat, fcol_search = st.columns([1, 2])
-        with fcol_stat:
-            status_filter = st.selectbox(
-                "Filtrar Catálogo:",
-                [f"🔴 Sin Auditar ({cnt_sin_auditar})", f"🟢 Auditadas ({cnt_auditadas})", f"📋 Todas ({cnt_total})"],
-                key="audit_status_filter"
-            )
-        with fcol_search:
-            audit_search = st.text_input(
-                "🔎 Buscar por Consecutivo ING, No. Pieza o SKU:",
-                placeholder="Ej: ING0010 ó 12-A-6199 ó PP21340",
-                key="audit_search_input"
-            )
+        with sub_tab_matrix:
+            render_audit_matrix_table(cursor)
 
-        # Construir consulta dinámica
-        where_clauses = []
-        params = []
-        if "🔴 Sin Auditar" in status_filter:
-            where_clauses.append("(estatus_auditoria = 'Sin Auditar' OR estatus_auditoria IS NULL)")
-        elif "🟢 Auditadas" in status_filter:
-            where_clauses.append("estatus_auditoria = 'Auditada'")
-
-        if audit_search.strip():
-            where_clauses.append("(consecutivo_ing LIKE ? OR numero_pieza LIKE ? OR nombre_sku LIKE ?)")
-            q_like = f"%{audit_search.strip()}%"
-            params.extend([q_like, q_like, q_like])
-
-        query = "SELECT * FROM piezas"
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-        query += " ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku"
-
-        cursor.execute(query, tuple(params))
-        audit_rows = [dict(r) for r in cursor.fetchall()]
-
-        if not audit_rows:
-            st.info("ℹ️ No se encontraron piezas que coincidan con los filtros seleccionados.")
-        else:
-            def audit_label(p):
-                ing = p.get("consecutivo_ing") or "S/C"
-                status_icon = "🟢" if p.get("estatus_auditoria") == "Auditada" else "🔴"
-                return f"{status_icon} [{ing}] {p['nombre_sku']}"
-
-            audit_map = {audit_label(p): p for p in audit_rows}
-            selected_audit_label = st.selectbox(
-                f"Seleccione la Pieza a Auditar ({len(audit_rows)} mostradas):",
-                list(audit_map.keys()),
-                key="audit_selected_piece_box"
-            )
-            p_sel = audit_map[selected_audit_label]
-
-            # Ficha de la pieza
-            st.markdown(f"""
-            <div style="background:#F8F9FA; border:1px solid #D2D3D5; border-radius:8px; padding:1.2rem; margin:1rem 0;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
-                    <span style="font-family:'Montserrat',sans-serif; font-size:1.3rem; font-weight:800; color:#111111;">
-                        [{p_sel.get('consecutivo_ing') or 'S/C'}] {p_sel['nombre_sku']}
-                    </span>
-                    <span style="background:{'#16a34a' if p_sel.get('estatus_auditoria')=='Auditada' else '#dc2626'}; color:#fff; font-weight:bold; padding:4px 14px; border-radius:20px; font-size:0.85rem;">
-                        {p_sel.get('estatus_auditoria', 'Sin Auditar')}
-                    </span>
-                </div>
-                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; font-size:0.9rem; color:#4B5563;">
-                    <span>📌 <b>No. Pieza:</b> {p_sel['numero_pieza']}</span>
-                    <span>🧱 <b>Material:</b> {p_sel['material']}</span>
-                    <span>📏 <b>Espesor:</b> {p_sel['espesor_materia_prima']:.4f} in</span>
-                    <span>📐 <b>Dimensiones:</b> {p_sel['largo_materia_prima']:.3f} x {p_sel['ancho_materia_prima']:.3f} in</span>
-                    <span>🎨 <b>Acabado:</b> {p_sel['acabado_estandar']}</span>
-                    <span>🔖 <b>Factor K:</b> {p_sel['factor_k']}</span>
-                    <span>📋 <b>Versión:</b> {p_sel['version']}-{p_sel['revision']}</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Checklist de Documentos Requeridos
-            st.markdown("##### 📋 Checklist de Documentación de Ingeniería")
-            from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
-
-            docs = [
-                ("Plano de Control SIGRAMA (PDF)", p_sel.get("archivo_plano_control"), "application/pdf"),
-                ("Plano Original del Cliente (PDF)", p_sel.get("archivo_dibujo_original"), "application/pdf"),
-                ("Archivo de Corte Láser (DXF)", p_sel.get("archivo_dxf"), "application/dxf"),
-                ("Modelo 3D de Intercambio (STEP)", p_sel.get("archivo_step"), "application/octet-stream"),
-                ("Modelo 3D SolidWorks (SLDPRT)", p_sel.get("archivo_plano_nativo_3d"), "application/octet-stream"),
-                ("Dibujo 2D SolidWorks (SLDDRW)", p_sel.get("archivo_dibujo_nativo_2d"), "application/octet-stream"),
-                ("Especificaciones de Tolerancias (Excel)", p_sel.get("archivo_excel_resumen"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
-                ("VoBo / Primera Pieza", p_sel.get("documento_primera_pieza"), "application/pdf"),
-            ]
-
-            doc_cols = st.columns(4)
-            for idx, (doc_name, doc_path, doc_mime) in enumerate(docs):
-                c = doc_cols[idx % 4]
-                with c:
-                    has_doc = False
-                    f_bytes = None
-                    if doc_path:
-                        f_bytes = get_file_bytes(doc_path)
-                        if f_bytes:
-                            has_doc = True
-                    
-                    if has_doc:
-                        st.markdown(f"**✅ {doc_name}**")
-                        clean_fn = os.path.basename(str(doc_path).replace('\\', '/').split('?')[0])
-                        st.download_button(
-                            label="📥 Descargar",
-                            data=f_bytes,
-                            file_name=clean_fn,
-                            mime=doc_mime,
-                            key=f"btn_dl_audit_{idx}_{p_sel['id']}",
-                            use_container_width=True
-                        )
-                    else:
-                        st.markdown(f"**❌ {doc_name}**")
-                        st.caption("No registrado")
-
-            st.markdown("---")
-
-            # Vista Previa del Plano de Control
-            st.markdown("##### 📄 Vista Previa del Plano de Control")
-            preview_pdf_path = p_sel.get("archivo_plano_control") or p_sel.get("archivo_dibujo_original")
-            preview_bytes = get_file_bytes(preview_pdf_path) if preview_pdf_path else None
-
-            if preview_bytes:
-                import base64
-                pdf_b64 = base64.b64encode(preview_bytes).decode("utf-8")
-                pdfjs_audit_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta charset="utf-8">
-                  <style>
-                    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-                    body {{ background: #525659; overflow-y: auto; height: 420px; }}
-                    #pdf-wrapper {{ display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px; }}
-                    canvas {{ display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.5); max-width: 100%; }}
-                    #pdf-loading {{ color: #94a3b8; font-size: 14px; padding: 2rem; text-align: center; }}
-                  </style>
-                  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-                </head>
-                <body>
-                  <div id="pdf-wrapper"><div id="pdf-loading">⏳ Cargando plano de control...</div></div>
-                  <script>
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                    const raw = atob("{pdf_b64}");
-                    const uint8 = new Uint8Array(raw.length);
-                    for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
-                    pdfjsLib.getDocument({{ data: uint8 }}).promise.then(pdf => {{
-                      document.getElementById('pdf-loading').remove();
-                      const renderPage = (num) => {{
-                        pdf.getPage(num).then(page => {{
-                          const vp0 = page.getViewport({{ scale: 1 }});
-                          const wrapper = document.getElementById('pdf-wrapper');
-                          const scale = (wrapper.clientWidth - 20) / vp0.width;
-                          const viewport = page.getViewport({{ scale }});
-                          const canvas = document.createElement('canvas');
-                          canvas.width = viewport.width; canvas.height = viewport.height;
-                          wrapper.appendChild(canvas);
-                          page.render({{ canvasContext: canvas.getContext('2d'), viewport }});
-                          if (num < pdf.numPages) renderPage(num + 1);
-                        }});
-                      }};
-                      renderPage(1);
-                    }});
-                  </script>
-                </body>
-                </html>
-                """
-                components.html(pdfjs_audit_html, height=440, scrolling=False)
-            else:
-                st.warning("⚠️ No se encontró el archivo PDF del plano para generar vista previa.")
-
-            st.markdown("---")
-
-            # Formulario de Dictamen del Administrador
-            st.markdown("##### ✍️ Dictamen y Aprobación del Administrador")
-            audit_notes = st.text_area(
-                "Notas u Observaciones de la Auditoría:",
-                value=p_sel.get("auditoria_notas") or "",
-                placeholder="Indique si el plano cumple tolerancias, especificaciones de corte y doblez, o motivos de rechazo.",
-                key=f"notes_audit_{p_sel['id']}"
-            )
-
-            col_act1, col_act2, col_act3 = st.columns([2, 1, 1])
-            with col_act1:
-                btn_approve = st.button(
-                    "✅ Auditar y Aprobar Pieza (Habilitar en Visor 3D CAD)",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"btn_approve_audit_{p_sel['id']}"
-                )
-            with col_act2:
-                btn_reject = st.button(
-                    "⚠️ Rechazar / Observaciones",
-                    use_container_width=True,
-                    key=f"btn_reject_audit_{p_sel['id']}"
-                )
-            with col_act3:
-                btn_reset = st.button(
-                    "🔄 Marcar 'Sin Auditar'",
-                    use_container_width=True,
-                    key=f"btn_reset_audit_{p_sel['id']}"
-                )
-
-            if btn_approve:
-                admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
-                cursor.execute("""
-                    UPDATE piezas SET
-                        estatus_auditoria = 'Auditada',
-                        fecha_auditoria = CURRENT_TIMESTAMP,
-                        auditor_nombre = ?,
-                        auditoria_notas = ?
-                    WHERE id = ?
-                """, (admin_name, audit_notes, p_sel["id"]))
-                conn.commit()
-                from src.database import save_database_to_gcs
-                save_database_to_gcs()
-                st.success(f"🎉 ¡Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' auditada y aprobada con éxito! Ahora está disponible en el 3.1. Visualizador 3D CAD.")
-                import time
-                time.sleep(1)
-                st.rerun()
-
-            elif btn_reject:
-                admin_name = st.session_state.get("nombre_completo", "Administrador de Calidad")
-                cursor.execute("""
-                    UPDATE piezas SET
-                        estatus_auditoria = 'Rechazada',
-                        fecha_auditoria = CURRENT_TIMESTAMP,
-                        auditor_nombre = ?,
-                        auditoria_notas = ?
-                    WHERE id = ?
-                """, (admin_name, audit_notes, p_sel["id"]))
-                conn.commit()
-                from src.database import save_database_to_gcs
-                save_database_to_gcs()
-                st.warning(f"⚠️ Pieza '[{p_sel.get('consecutivo_ing')}] {p_sel['nombre_sku']}' marcada como Rechazada con observaciones.")
-                import time
-                time.sleep(1)
-                st.rerun()
-
-            elif btn_reset:
-                cursor.execute("""
-                    UPDATE piezas SET
-                        estatus_auditoria = 'Sin Auditar',
-                        fecha_auditoria = NULL,
-                        auditor_nombre = NULL
-                    WHERE id = ?
-                """, (p_sel["id"],))
-                conn.commit()
-                from src.database import save_database_to_gcs
-                save_database_to_gcs()
-                st.info(f"Pieza restablecida a 'Sin Auditar'.")
-                import time
-                time.sleep(1)
-                st.rerun()
+        with sub_tab_single:
+            render_individual_piece_audit(cursor, conn, cnt_sin_auditar, cnt_auditadas, cnt_total)
 
     with tab1:
         st.markdown("#### Registro de Nueva Pieza")
