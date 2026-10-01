@@ -995,12 +995,21 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 cursor: not-allowed;
                 box-shadow: none;
             }}
+            #sw-heads-up-toolbar .sw-btn#btn-sw-gesture.active {{
+                background: #059669 !important;
+                border-color: #10b981 !important;
+                color: #ffffff !important;
+                box-shadow: 0 0 10px rgba(16, 185, 129, 0.8) !important;
+            }}
         </style>
         <!-- Three.js CDN global UMD - compatible con iframe srcdoc de Streamlit -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
         <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
         <script src="https://unpkg.com/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+        <!-- MediaPipe Hands & Camera Utils para Control Gestual 3D -->
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     </head>
     <body>
         <!-- ── SolidWorks Heads-Up View Toolbar (Top Center) ── -->
@@ -1091,11 +1100,35 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     <circle cx="17.5" cy="8.5" r="1" fill="#22c55e"/>
                 </svg>
             </button>
+            <button class="sw-btn" id="btn-sw-gesture" title="🖐️ Control Gestual con Cámara (Girar y Zoom con la Mano)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#38bdf8" stroke-width="2">
+                    <path d="M18 11V6a2 2 0 0 0-4 0v4M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8M6 14v1a7 7 0 0 0 14 0v-4a2 2 0 0 0-4 0"/>
+                </svg>
+            </button>
             <button class="sw-btn" id="btn-sw-fullscreen" title="🖥️ Maximizar / Salir Pantalla Completa">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
                 </svg>
             </button>
+        </div>
+
+        <!-- ── Mini Recuadro HUD de Control Gestual (Cámara Web) ── -->
+        <div id="gesture-hud-box" style="display: none; position: absolute; bottom: 20px; left: 20px; width: 220px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0f172a; border-bottom: 1px solid rgba(16, 185, 129, 0.4);">
+                <span style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px;">🖐️ CONTROL GESTUAL</span>
+                <button id="btn-close-gesture" title="Cerrar Cámara" style="background: none; border: none; color: #94a3b8; font-size: 14px; font-weight: bold; cursor: pointer; padding: 0 4px; line-height: 1;">✕</button>
+            </div>
+            <div style="position: relative; width: 220px; height: 165px; background: #000;">
+                <video id="gesture-video" style="display: none;" playsinline></video>
+                <canvas id="gesture-canvas" width="220" height="165" style="width: 100%; height: 100%; display: block;"></canvas>
+                <div id="gesture-status-badge" style="position: absolute; bottom: 6px; left: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #38bdf8; font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 4px 6px; border: 1px solid rgba(56, 189, 248, 0.3); pointer-events: none;">
+                    Iniciando cámara...
+                </div>
+            </div>
+            <div style="padding: 6px 8px; font-size: 10px; color: #e2e8f0; background: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); line-height: 1.35; text-align: center;">
+                <span style="color: #4ade80; font-weight: bold;">🖐️ Mueve la mano:</span> Gira el 3D<br>
+                <span style="color: #38bdf8; font-weight: bold;">🤏 Pellizco:</span> Zoom In / Out
+            </div>
         </div>
 
         <!-- ── Technical Inspection HUD Card (Top Left) ── -->
@@ -2066,6 +2099,202 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
             const btnSwFullscreen = document.getElementById('btn-sw-fullscreen');
             if (btnSwFullscreen) btnSwFullscreen.addEventListener('click', () => toggleFullscreen());
+
+            // ─── Control Gestual por Cámara Web (MediaPipe Hands) ─────────────────────────
+            const btnSwGesture = document.getElementById('btn-sw-gesture');
+            const gestureHudBox = document.getElementById('gesture-hud-box');
+            const btnCloseGesture = document.getElementById('btn-close-gesture');
+            const gestureVideo = document.getElementById('gesture-video');
+            const gestureCanvas = document.getElementById('gesture-canvas');
+            const gestureStatusBadge = document.getElementById('gesture-status-badge');
+
+            let gestureActive = false;
+            let handsDetector = null;
+            let cameraHelper = null;
+            let lastHandPos = null;
+            let lastPinchDist = null;
+            let gCanvasCtx = gestureCanvas ? gestureCanvas.getContext('2d') : null;
+
+            // Conexiones de los 21 puntos anatómicos de la mano
+            const HAND_CONNECTIONS = [
+                [0, 1], [1, 2], [2, 3], [3, 4],
+                [0, 5], [5, 6], [6, 7], [7, 8],
+                [5, 9], [9, 10], [10, 11], [11, 12],
+                [9, 13], [13, 14], [14, 15], [15, 16],
+                [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
+            ];
+
+            function onHandResults(results) {{
+                if (!gestureActive || !gCanvasCtx || !gestureCanvas) return;
+
+                const cw = gestureCanvas.width;
+                const ch = gestureCanvas.height;
+
+                // Dibujar imagen de la cámara espejada horizontalmente
+                gCanvasCtx.save();
+                gCanvasCtx.clearRect(0, 0, cw, ch);
+                gCanvasCtx.translate(cw, 0);
+                gCanvasCtx.scale(-1, 1);
+                if (results.image) {{
+                    gCanvasCtx.drawImage(results.image, 0, 0, cw, ch);
+                }}
+                gCanvasCtx.restore();
+
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
+                    const lms = results.multiHandLandmarks[0];
+
+                    // Dibujar esqueleto de la mano en verde neón
+                    gCanvasCtx.strokeStyle = '#10b981';
+                    gCanvasCtx.lineWidth = 2.5;
+                    for (let c = 0; c < HAND_CONNECTIONS.length; c++) {{
+                        const p1 = HAND_CONNECTIONS[c][0];
+                        const p2 = HAND_CONNECTIONS[c][1];
+                        const x1 = (1 - lms[p1].x) * cw;
+                        const y1 = lms[p1].y * ch;
+                        const x2 = (1 - lms[p2].x) * cw;
+                        const y2 = lms[p2].y * ch;
+                        gCanvasCtx.beginPath();
+                        gCanvasCtx.moveTo(x1, y1);
+                        gCanvasCtx.lineTo(x2, y2);
+                        gCanvasCtx.stroke();
+                    }}
+
+                    // Dibujar puntos de las articulaciones
+                    for (let i = 0; i < lms.length; i++) {{
+                        const px = (1 - lms[i].x) * cw;
+                        const py = lms[i].y * ch;
+                        gCanvasCtx.beginPath();
+                        gCanvasCtx.arc(px, py, (i === 4 || i === 8 || i === 9) ? 4.5 : 2.5, 0, 2 * Math.PI);
+                        gCanvasCtx.fillStyle = (i === 4 || i === 8) ? '#38bdf8' : (i === 9 ? '#f59e0b' : '#22c55e');
+                        gCanvasCtx.fill();
+                    }}
+
+                    // Palma de la mano (Landmark 9)
+                    const palmX = 1 - lms[9].x;
+                    const palmY = lms[9].y;
+
+                    // Detección de pellizco (Pulgar 4 a Índice 8)
+                    const dxPinch = lms[4].x - lms[8].x;
+                    const dyPinch = lms[4].y - lms[8].y;
+                    const pinchDist = Math.hypot(dxPinch, dyPinch);
+                    const isPinching = pinchDist < 0.085;
+
+                    if (isPinching) {{
+                        if (gestureStatusBadge) {{
+                            gestureStatusBadge.style.color = '#38bdf8';
+                            gestureStatusBadge.textContent = '🤏 Pellizco Activo: Zoom CAD';
+                        }}
+                        if (lastPinchDist !== null) {{
+                            const deltaPinch = pinchDist - lastPinchDist;
+                            if (Math.abs(deltaPinch) > 0.003) {{
+                                if (deltaPinch > 0) {{
+                                    controls.dollyIn(1.035);
+                                }} else {{
+                                    controls.dollyOut(1.035);
+                                }}
+                                controls.update();
+                            }}
+                        }}
+                        lastPinchDist = pinchDist;
+                        lastHandPos = null;
+                    }} else {{
+                        if (gestureStatusBadge) {{
+                            gestureStatusBadge.style.color = '#22c55e';
+                            gestureStatusBadge.textContent = '🖐️ Mano Detectada: Rotando';
+                        }}
+                        lastPinchDist = null;
+
+                        if (lastHandPos !== null) {{
+                            const dx = palmX - lastHandPos.x;
+                            const dy = palmY - lastHandPos.y;
+
+                            if (Math.hypot(dx, dy) > 0.003) {{
+                                const speed = 4.8;
+                                controls.rotateLeft(dx * speed);
+                                controls.rotateUp(-dy * speed);
+                                controls.update();
+                            }}
+                        }}
+                        lastHandPos = {{ x: palmX, y: palmY }};
+                    }}
+                }} else {{
+                    if (gestureStatusBadge) {{
+                        gestureStatusBadge.style.color = '#94a3b8';
+                        gestureStatusBadge.textContent = '👁️ Coloca tu mano frente a la cámara';
+                    }}
+                    lastHandPos = null;
+                    lastPinchDist = null;
+                }}
+            }}
+
+            async function toggleGestureTracking() {{
+                gestureActive = !gestureActive;
+
+                if (gestureActive) {{
+                    if (btnSwGesture) btnSwGesture.classList.add('active');
+                    if (gestureHudBox) gestureHudBox.style.display = 'block';
+                    if (gestureStatusBadge) {{
+                        gestureStatusBadge.style.color = '#38bdf8';
+                        gestureStatusBadge.textContent = 'Iniciando cámara...';
+                    }}
+
+                    try {{
+                        if (typeof Hands === 'undefined') {{
+                            throw new Error('Librería MediaPipe Hands no cargada aún');
+                        }}
+
+                        if (!handsDetector) {{
+                            handsDetector = new Hands({{
+                                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${{file}}`
+                            }});
+                            handsDetector.setOptions({{
+                                maxNumHands: 1,
+                                modelComplexity: 0,
+                                minDetectionConfidence: 0.5,
+                                minTrackingConfidence: 0.5
+                            }});
+                            handsDetector.onResults(onHandResults);
+                        }}
+
+                        if (!cameraHelper) {{
+                            cameraHelper = new Camera(gestureVideo, {{
+                                onFrame: async () => {{
+                                    if (gestureActive && handsDetector) {{
+                                        await handsDetector.send({{ image: gestureVideo }});
+                                    }}
+                                }},
+                                width: 320,
+                                height: 240
+                            }});
+                        }}
+
+                        await cameraHelper.start();
+                    }} catch (err) {{
+                        console.error('Error al iniciar control gestual:', err);
+                        if (gestureStatusBadge) {{
+                            gestureStatusBadge.style.color = '#ef4444';
+                            gestureStatusBadge.textContent = '⚠️ Cámara no disponible / denegada';
+                        }}
+                    }}
+                }} else {{
+                    if (btnSwGesture) btnSwGesture.classList.remove('active');
+                    if (gestureHudBox) gestureHudBox.style.display = 'none';
+                    lastHandPos = null;
+                    lastPinchDist = null;
+                    if (cameraHelper) {{
+                        try {{
+                            cameraHelper.stop();
+                        }} catch (e) {{}}
+                    }}
+                }}
+            }}
+
+            if (btnSwGesture) {{
+                btnSwGesture.addEventListener('click', toggleGestureTracking);
+            }}
+            if (btnCloseGesture) {{
+                btnCloseGesture.addEventListener('click', toggleGestureTracking);
+            }}
 
             // ─── Toggle minimizar / expandir Ficha HUD ───
             const btnToggleHud = document.getElementById('btn-toggle-hud');
