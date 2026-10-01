@@ -1113,15 +1113,21 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         </div>
 
         <!-- ── Mini Recuadro HUD de Control Gestual (Cámara Web) ── -->
-        <div id="gesture-hud-box" style="display: none; position: absolute; top: 60px; right: 20px; width: 220px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div id="gesture-hud-box" style="display: none; position: absolute; top: 60px; right: 20px; width: 230px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0f172a; border-bottom: 1px solid rgba(16, 185, 129, 0.4);">
                 <span style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px;">🖐️ CONTROL GESTUAL</span>
                 <button id="btn-close-gesture" title="Cerrar Cámara" style="background: none; border: none; color: #94a3b8; font-size: 14px; font-weight: bold; cursor: pointer; padding: 0 4px; line-height: 1;">✕</button>
             </div>
-            <div style="position: relative; width: 220px; height: 165px; background: #000; overflow: hidden;">
+            <!-- Selector de Cámara (prioriza Cámara Integrada y descarta celulares por defecto) -->
+            <div style="padding: 4px 8px; background: #1e293b; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <select id="gesture-camera-select" title="Seleccionar cámara de video" style="width: 100%; background: #0f172a; color: #38bdf8; border: 1px solid #334155; border-radius: 4px; font-size: 10px; padding: 3px 6px; outline: none; cursor: pointer;">
+                    <option value="">Detectando cámaras de la PC...</option>
+                </select>
+            </div>
+            <div style="position: relative; width: 230px; height: 165px; background: #000; overflow: hidden;">
                 <!-- Video con tamaño real pero fuera de la vista para que el navegador decodifique a 30fps sin display:none -->
                 <video id="gesture-video" autoplay playsinline muted style="position: absolute; top: 0; left: 0; width: 320px; height: 240px; opacity: 0; pointer-events: none; z-index: -1;"></video>
-                <canvas id="gesture-canvas" width="220" height="165" style="width: 100%; height: 100%; display: block; transform: scaleX(-1);"></canvas>
+                <canvas id="gesture-canvas" width="230" height="165" style="width: 100%; height: 100%; display: block; transform: scaleX(-1);"></canvas>
                 <div id="gesture-status-badge" style="position: absolute; bottom: 6px; left: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #38bdf8; font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 4px 6px; border: 1px solid rgba(56, 189, 248, 0.3); pointer-events: none;">
                     Iniciando cámara...
                 </div>
@@ -2108,6 +2114,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             const gestureVideo = document.getElementById('gesture-video');
             const gestureCanvas = document.getElementById('gesture-canvas');
             const gestureStatusBadge = document.getElementById('gesture-status-badge');
+            const gestureCameraSelect = document.getElementById('gesture-camera-select');
 
             let gestureActive = false;
             let handsDetector = null;
@@ -2232,6 +2239,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
             let animFrameId = null;
             let gestureStream = null;
+            let selectedCameraId = null;
 
             async function stepGestureDetection() {{
                 if (!gestureActive) return;
@@ -2245,6 +2253,92 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 if (gestureActive) {{
                     animFrameId = requestAnimationFrame(stepGestureDetection);
                 }}
+            }}
+
+            async function startSelectedCamera(deviceId) {{
+                if (gestureStream) {{
+                    try {{
+                        gestureStream.getTracks().forEach(t => t.stop());
+                    }} catch (e) {{}}
+                    gestureStream = null;
+                }}
+
+                const constraints = {{
+                    video: {{
+                        width: {{ ideal: 320 }},
+                        height: {{ ideal: 240 }},
+                        deviceId: deviceId ? {{ exact: deviceId }} : undefined
+                    }},
+                    audio: false
+                }};
+
+                gestureStream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (gestureVideo) {{
+                    gestureVideo.srcObject = gestureStream;
+                    await gestureVideo.play();
+                }}
+
+                await populateCameraDropdown();
+            }}
+
+            async function populateCameraDropdown() {{
+                try {{
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const vDevs = devices.filter(d => d.kind === 'videoinput');
+                    if (gestureCameraSelect && vDevs.length > 0) {{
+                        gestureCameraSelect.innerHTML = '';
+                        let defaultPick = null;
+
+                        vDevs.forEach((dev, idx) => {{
+                            const label = dev.label || ('Cámara ' + (idx + 1));
+                            const opt = document.createElement('option');
+                            opt.value = dev.deviceId;
+                            opt.textContent = label;
+
+                            const isPhone = /phone|kingkong|virtual|droid|iriun/i.test(label);
+                            const isIntegrated = /integrated|internal|built-in|facetime|hd camera|webcam/i.test(label);
+
+                            if (isIntegrated && !defaultPick) {{
+                                defaultPick = dev.deviceId;
+                            }} else if (!isPhone && !defaultPick) {{
+                                defaultPick = dev.deviceId;
+                            }}
+
+                            gestureCameraSelect.appendChild(opt);
+                        }});
+
+                        if (!selectedCameraId && defaultPick) {{
+                            selectedCameraId = defaultPick;
+                        }}
+
+                        if (selectedCameraId) {{
+                            gestureCameraSelect.value = selectedCameraId;
+                        }}
+                    }}
+                }} catch (e) {{
+                    console.warn('Error al enumerar cámaras:', e);
+                }}
+            }}
+
+            if (gestureCameraSelect) {{
+                gestureCameraSelect.addEventListener('change', async () => {{
+                    selectedCameraId = gestureCameraSelect.value;
+                    if (gestureActive) {{
+                        try {{
+                            if (gestureStatusBadge) {{
+                                gestureStatusBadge.style.color = '#38bdf8';
+                                gestureStatusBadge.textContent = 'Cambiando de cámara...';
+                            }}
+                            await startSelectedCamera(selectedCameraId);
+                        }} catch (err) {{
+                            console.error('Error al cambiar cámara:', err);
+                            if (gestureStatusBadge) {{
+                                gestureStatusBadge.style.color = '#ef4444';
+                                gestureStatusBadge.textContent = '⚠️ Error al cambiar de cámara';
+                            }}
+                        }}
+                    }}
+                }});
             }}
 
             async function toggleGestureTracking() {{
@@ -2276,20 +2370,20 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                             handsDetector.onResults(onHandResults);
                         }}
 
-                        // Solicitar acceso directo a la cámara web
-                        gestureStream = await navigator.mediaDevices.getUserMedia({{
-                            video: {{
-                                width: {{ ideal: 320 }},
-                                height: {{ ideal: 240 }},
-                                facingMode: 'user'
-                            }},
-                            audio: false
-                        }});
+                        // Intentar detectar y priorizar la Integrated Camera física
+                        try {{
+                            const devs = await navigator.mediaDevices.enumerateDevices();
+                            const vDevs = devs.filter(d => d.kind === 'videoinput');
+                            const integrated = vDevs.find(d => /integrated|internal|built-in|facetime|hd camera|webcam/i.test(d.label) && !/phone|kingkong/i.test(d.label));
+                            if (integrated) {{
+                                selectedCameraId = integrated.deviceId;
+                            }} else if (vDevs.length > 0) {{
+                                const nonPhone = vDevs.find(d => !/phone|kingkong/i.test(d.label));
+                                selectedCameraId = nonPhone ? nonPhone.deviceId : vDevs[0].deviceId;
+                            }}
+                        }} catch (e) {{}}
 
-                        if (gestureVideo) {{
-                            gestureVideo.srcObject = gestureStream;
-                            await gestureVideo.play();
-                        }}
+                        await startSelectedCamera(selectedCameraId);
 
                         if (animFrameId) cancelAnimationFrame(animFrameId);
                         animFrameId = requestAnimationFrame(stepGestureDetection);
