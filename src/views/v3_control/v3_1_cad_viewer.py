@@ -2230,6 +2230,23 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
             }}
 
+            let animFrameId = null;
+            let gestureStream = null;
+
+            async function stepGestureDetection() {{
+                if (!gestureActive) return;
+                if (gestureVideo && gestureVideo.readyState >= 2 && handsDetector) {{
+                    try {{
+                        await handsDetector.send({{ image: gestureVideo }});
+                    }} catch (e) {{
+                        console.warn('Frame detection error:', e);
+                    }}
+                }}
+                if (gestureActive) {{
+                    animFrameId = requestAnimationFrame(stepGestureDetection);
+                }}
+            }}
+
             async function toggleGestureTracking() {{
                 gestureActive = !gestureActive;
 
@@ -2243,7 +2260,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
                     try {{
                         if (typeof Hands === 'undefined') {{
-                            throw new Error('Librería MediaPipe Hands no cargada aún');
+                            throw new Error('Librería MediaPipe Hands no cargada');
                         }}
 
                         if (!handsDetector) {{
@@ -2259,27 +2276,34 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                             handsDetector.onResults(onHandResults);
                         }}
 
-                        if (!cameraHelper) {{
-                            cameraHelper = new Camera(gestureVideo, {{
-                                onFrame: async () => {{
-                                    if (gestureActive && handsDetector && gestureVideo.videoWidth > 0) {{
-                                        await handsDetector.send({{ image: gestureVideo }});
-                                    }}
-                                }},
-                                width: 320,
-                                height: 240
-                            }});
+                        // Solicitar acceso directo a la cámara web
+                        gestureStream = await navigator.mediaDevices.getUserMedia({{
+                            video: {{
+                                width: {{ ideal: 320 }},
+                                height: {{ ideal: 240 }},
+                                facingMode: 'user'
+                            }},
+                            audio: false
+                        }});
+
+                        if (gestureVideo) {{
+                            gestureVideo.srcObject = gestureStream;
+                            await gestureVideo.play();
                         }}
 
-                        await cameraHelper.start();
-                        if (gestureVideo) {{
-                            gestureVideo.play().catch(e => console.warn(e));
-                        }}
+                        if (animFrameId) cancelAnimationFrame(animFrameId);
+                        animFrameId = requestAnimationFrame(stepGestureDetection);
                     }} catch (err) {{
                         console.error('Error al iniciar control gestual:', err);
                         if (gestureStatusBadge) {{
                             gestureStatusBadge.style.color = '#ef4444';
-                            gestureStatusBadge.textContent = '⚠️ Cámara no disponible / denegada';
+                            if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {{
+                                gestureStatusBadge.textContent = '⚠️ Cámara ocupada por otra app (ciérrala)';
+                            }} else if (err.name === 'NotAllowedError') {{
+                                gestureStatusBadge.textContent = '⚠️ Permiso de cámara denegado';
+                            }} else {{
+                                gestureStatusBadge.textContent = '⚠️ Error de cámara: ' + (err.name || 'desconocido');
+                            }}
                         }}
                     }}
                 }} else {{
@@ -2287,10 +2311,18 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     if (gestureHudBox) gestureHudBox.style.display = 'none';
                     lastHandPos = null;
                     lastPinchDist = null;
-                    if (cameraHelper) {{
+                    if (animFrameId) {{
+                        cancelAnimationFrame(animFrameId);
+                        animFrameId = null;
+                    }}
+                    if (gestureStream) {{
                         try {{
-                            cameraHelper.stop();
+                            gestureStream.getTracks().forEach(t => t.stop());
                         }} catch (e) {{}}
+                        gestureStream = null;
+                    }}
+                    if (gestureVideo) {{
+                        gestureVideo.srcObject = null;
                     }}
                 }}
             }}
