@@ -1113,14 +1113,15 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         </div>
 
         <!-- ── Mini Recuadro HUD de Control Gestual (Cámara Web) ── -->
-        <div id="gesture-hud-box" style="display: none; position: absolute; bottom: 20px; left: 20px; width: 220px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div id="gesture-hud-box" style="display: none; position: absolute; top: 60px; right: 20px; width: 220px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0f172a; border-bottom: 1px solid rgba(16, 185, 129, 0.4);">
                 <span style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px;">🖐️ CONTROL GESTUAL</span>
                 <button id="btn-close-gesture" title="Cerrar Cámara" style="background: none; border: none; color: #94a3b8; font-size: 14px; font-weight: bold; cursor: pointer; padding: 0 4px; line-height: 1;">✕</button>
             </div>
-            <div style="position: relative; width: 220px; height: 165px; background: #000;">
-                <video id="gesture-video" style="display: none;" playsinline></video>
-                <canvas id="gesture-canvas" width="220" height="165" style="width: 100%; height: 100%; display: block;"></canvas>
+            <div style="position: relative; width: 220px; height: 165px; background: #000; overflow: hidden;">
+                <!-- Video con tamaño real pero fuera de la vista para que el navegador decodifique a 30fps sin display:none -->
+                <video id="gesture-video" autoplay playsinline muted style="position: absolute; top: 0; left: 0; width: 320px; height: 240px; opacity: 0; pointer-events: none; z-index: -1;"></video>
+                <canvas id="gesture-canvas" width="220" height="165" style="width: 100%; height: 100%; display: block; transform: scaleX(-1);"></canvas>
                 <div id="gesture-status-badge" style="position: absolute; bottom: 6px; left: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #38bdf8; font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 4px 6px; border: 1px solid rgba(56, 189, 248, 0.3); pointer-events: none;">
                     Iniciando cámara...
                 </div>
@@ -2130,28 +2131,28 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 const cw = gestureCanvas.width;
                 const ch = gestureCanvas.height;
 
-                // Dibujar imagen de la cámara espejada horizontalmente
-                gCanvasCtx.save();
                 gCanvasCtx.clearRect(0, 0, cw, ch);
-                gCanvasCtx.translate(cw, 0);
-                gCanvasCtx.scale(-1, 1);
-                if (results.image) {{
+
+                // Dibujar el fotograma en vivo de la cámara
+                if (gestureVideo && gestureVideo.videoWidth > 0) {{
+                    gCanvasCtx.drawImage(gestureVideo, 0, 0, cw, ch);
+                }} else if (results.image) {{
                     gCanvasCtx.drawImage(results.image, 0, 0, cw, ch);
                 }}
-                gCanvasCtx.restore();
 
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
                     const lms = results.multiHandLandmarks[0];
 
-                    // Dibujar esqueleto de la mano en verde neón
+                    // Dibujar esqueleto de la mano en verde neón brillante
+                    // El canvas tiene transform: scaleX(-1) en CSS, por lo que lms[i].x * cw se alinea perfectamente
                     gCanvasCtx.strokeStyle = '#10b981';
                     gCanvasCtx.lineWidth = 2.5;
                     for (let c = 0; c < HAND_CONNECTIONS.length; c++) {{
                         const p1 = HAND_CONNECTIONS[c][0];
                         const p2 = HAND_CONNECTIONS[c][1];
-                        const x1 = (1 - lms[p1].x) * cw;
+                        const x1 = lms[p1].x * cw;
                         const y1 = lms[p1].y * ch;
-                        const x2 = (1 - lms[p2].x) * cw;
+                        const x2 = lms[p2].x * cw;
                         const y2 = lms[p2].y * ch;
                         gCanvasCtx.beginPath();
                         gCanvasCtx.moveTo(x1, y1);
@@ -2159,9 +2160,9 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         gCanvasCtx.stroke();
                     }}
 
-                    // Dibujar puntos de las articulaciones
+                    // Dibujar articulaciones
                     for (let i = 0; i < lms.length; i++) {{
-                        const px = (1 - lms[i].x) * cw;
+                        const px = lms[i].x * cw;
                         const py = lms[i].y * ch;
                         gCanvasCtx.beginPath();
                         gCanvasCtx.arc(px, py, (i === 4 || i === 8 || i === 9) ? 4.5 : 2.5, 0, 2 * Math.PI);
@@ -2170,6 +2171,8 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     }}
 
                     // Palma de la mano (Landmark 9)
+                    // En vista de espejo, cuando el usuario mueve su mano a su derecha,
+                    // en la cámara real el objeto se mueve hacia x=0, por lo que 1 - lms[9].x aumenta hacia la derecha
                     const palmX = 1 - lms[9].x;
                     const palmY = lms[9].y;
 
@@ -2209,7 +2212,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                             const dy = palmY - lastHandPos.y;
 
                             if (Math.hypot(dx, dy) > 0.003) {{
-                                const speed = 4.8;
+                                const speed = 5.2;
                                 controls.rotateLeft(dx * speed);
                                 controls.rotateUp(-dy * speed);
                                 controls.update();
@@ -2250,8 +2253,8 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                             handsDetector.setOptions({{
                                 maxNumHands: 1,
                                 modelComplexity: 0,
-                                minDetectionConfidence: 0.5,
-                                minTrackingConfidence: 0.5
+                                minDetectionConfidence: 0.4,
+                                minTrackingConfidence: 0.4
                             }});
                             handsDetector.onResults(onHandResults);
                         }}
@@ -2259,7 +2262,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         if (!cameraHelper) {{
                             cameraHelper = new Camera(gestureVideo, {{
                                 onFrame: async () => {{
-                                    if (gestureActive && handsDetector) {{
+                                    if (gestureActive && handsDetector && gestureVideo.videoWidth > 0) {{
                                         await handsDetector.send({{ image: gestureVideo }});
                                     }}
                                 }},
@@ -2269,6 +2272,9 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         }}
 
                         await cameraHelper.start();
+                        if (gestureVideo) {{
+                            gestureVideo.play().catch(e => console.warn(e));
+                        }}
                     }} catch (err) {{
                         console.error('Error al iniciar control gestual:', err);
                         if (gestureStatusBadge) {{
