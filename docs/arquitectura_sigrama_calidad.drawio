@@ -1,154 +1,172 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0">
-  <diagram id="sigrama-arch-2026" name="Arquitectura Cloud Run y Calidad 4.0 - SIGRAMA">
-    <mxGraphModel dx="1600" dy="850" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1200" math="0" shadow="0">
+  <diagram id="sigrama-arch-2026" name="Arquitectura Cloud Run, 2 VPCs y Calidad 4.0 - SIGRAMA">
+    <mxGraphModel dx="1800" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1850" pageHeight="1300" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
 
         <!-- BANNER SUPERIOR CON TÍTULO, LOGOS Y BADGES -->
         <mxCell id="header_banner" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0f172a;strokeColor=#ef4444;strokeWidth=2;shadow=1;" value="" vertex="1">
-          <mxGeometry height="90" width="1620" x="40" y="20" as="geometry" />
+          <mxGeometry height="95" width="1770" x="40" y="20" as="geometry" />
         </mxCell>
         
         <!-- LOGO SIGRAMA -->
-        <mxCell id="logo_sigrama_node" parent="header_banner" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=1;aspect=fixed;image=data:image/png;base64,﻿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;" value="" vertex="1">
-          <mxGeometry height="45" width="220" x="25" y="22" as="geometry" />
+        <mxCell id="logo_sigrama_node" parent="header_banner" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=1;aspect=fixed;image=data:image/png;base64,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;" value="" vertex="1">
+          <mxGeometry height="45" width="220" x="25" y="25" as="geometry" />
         </mxCell>
 
         <!-- TÍTULO PRINCIPAL DEL PROYECTO -->
-        <mxCell id="project_title" parent="header_banner" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" value="&lt;font color=&#39;#ffffff&#39; style=&#39;font-size: 20px; font-weight: 800;&#39;&gt;⚡ SIGRAMA — SISTEMA DE CONTROL DIMENSIONAL Y CALIDAD 3D&lt;/font&gt;&lt;br&gt;&lt;font color=&#39;#94a3b8&#39; style=&#39;font-size: 13px;&#39;&gt;Arquitectura de Infraestructura, Seguridad Perimetral, Flujo de Datos y Redes | Industria 4.0&lt;/font&gt;" vertex="1">
-          <mxGeometry height="60" width="750" x="270" y="15" as="geometry" />
+        <mxCell id="project_title" parent="header_banner" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" value="&lt;font color=&#39;#ffffff&#39; style=&#39;font-size: 19px; font-weight: 800;&#39;&gt;⚡ SIGRAMA — CONTROL DIMENSIONAL Y CALIDAD 3D (ARQUITECTURA CLOUD RUN 4.0)&lt;/font&gt;&lt;br&gt;&lt;font color=&#39;#94a3b8&#39; style=&#39;font-size: 12px;&#39;&gt;Infraestructura con Doble Red VPC (VM ⇄ 2 Cloud Run), Balanceador Global (136.81.184.225) y Roles Personalizados IAM&lt;/font&gt;" vertex="1">
+          <mxGeometry height="60" width="850" x="270" y="18" as="geometry" />
         </mxCell>
 
-        <!-- BADGES GOOGLE CLOUD & GITHUB -->
-        <mxCell id="badge_gcp" parent="header_banner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#3b82f6;fontStyle=1;fontSize=11;fontColor=#93c5fd;" value="☁️ Google Cloud Platform&#xa;Cloud Run &amp; Cloud Storage" vertex="1">
-          <mxGeometry height="50" width="180" x="1170" y="20" as="geometry" />
+        <!-- BADGES GOOGLE CLOUD & IAM -->
+        <mxCell id="badge_gcp" parent="header_banner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#3b82f6;fontStyle=1;fontSize=10;fontColor=#93c5fd;" value="☁️ Google Cloud Platform&#xa;Balanceador Global :80&#xa;IP: 136.81.184.225" vertex="1">
+          <mxGeometry height="60" width="180" x="1190" y="18" as="geometry" />
         </mxCell>
-        <mxCell id="badge_github" parent="header_banner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#a855f7;fontStyle=1;fontSize=11;fontColor=#e9d5ff;" value="🐙 GitHub CI/CD&#xa;Continuous Deployment" vertex="1">
-          <mxGeometry height="50" width="170" x="1370" y="20" as="geometry" />
+        <mxCell id="badge_iam" parent="header_banner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#eab308;fontStyle=1;fontSize=10;fontColor=#fef08a;" value="🛡️ Rol Personalizado IAM&#xa;jesus_aml@hotmail.com&#xa;sigrama_calidad_operador" vertex="1">
+          <mxGeometry height="60" width="190" x="1390" y="18" as="geometry" />
+        </mxCell>
+        <mxCell id="badge_github" parent="header_banner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e293b;strokeColor=#a855f7;fontStyle=1;fontSize=10;fontColor=#e9d5ff;" value="🐙 GitHub CI/CD&#xa;Cloud Build Trigger" vertex="1">
+          <mxGeometry height="60" width="140" x="1600" y="18" as="geometry" />
         </mxCell>
 
         <!-- 1. ZONA PLANTA INDUSTRIAL SIGRAMA -->
         <mxCell id="group_onprem" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;startSize=35;dashed=1;" value="🏭 PLANTA INDUSTRIAL SIGRAMA (ON-PREMISES LAN)" vertex="1">
-          <mxGeometry height="960" width="380" x="40" y="130" as="geometry" />
+          <mxGeometry height="1060" width="360" x="40" y="140" as="geometry" />
         </mxCell>
         <mxCell id="client_operator" parent="group_onprem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;shadow=1;" value="👷 INSPECTOR DE CALIDAD EN PISO&#xa;(Tablet / PC Industrial)&#xa;- Inspección Dimensional (Vernier/CMM)&#xa;- Captura de Cotas / Liberación de Lote" vertex="1">
-          <mxGeometry height="70" width="320" x="30" y="60" as="geometry" />
+          <mxGeometry height="70" width="300" x="30" y="60" as="geometry" />
         </mxCell>
         <mxCell id="client_engineer" parent="group_onprem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;shadow=1;" value="📐 INGENIERO DE DISEÑO (SolidWorks / CAD)&#xa;(Workstation Local)&#xa;- Exportación DXF, STEP, Planos PDF&#xa;- Sincronización Prototipos a la Nube" vertex="1">
-          <mxGeometry height="70" width="320" x="30" y="160" as="geometry" />
+          <mxGeometry height="70" width="300" x="30" y="160" as="geometry" />
         </mxCell>
         <mxCell id="client_admin" parent="group_onprem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;shadow=1;" value="🛡️ ADMINISTRADOR DE CALIDAD&#xa;(Oficina Técnica)&#xa;- Auditoría de Planos y Matriz de Faltantes&#xa;- Exportación Excel para Ingeniería / Remisiones" vertex="1">
-          <mxGeometry height="70" width="320" x="30" y="260" as="geometry" />
+          <mxGeometry height="70" width="300" x="30" y="260" as="geometry" />
         </mxCell>
         <mxCell id="nas_storage" parent="group_onprem" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fef08a;strokeColor=#ca8a04;fontStyle=1;fontSize=11;shadow=1;" value="📁 REPOSITORIO LOCAL DE PLANOS (SMB / NAS)&#xa;Z: - INGENIERIA\BASE DE DATOS PRODUCTOS\&#xa;- Planos Originales Cliente, DXF CNC, Modelos SLD" vertex="1">
-          <mxGeometry height="80" width="320" x="30" y="440" as="geometry" />
+          <mxGeometry height="80" width="300" x="30" y="440" as="geometry" />
         </mxCell>
         <mxCell id="sync_script" parent="group_onprem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fed7aa;strokeColor=#ea580c;fontStyle=1;fontSize=11;shadow=1;" value="⚡ SINCRONIZADOR DE PROTOTIPOS SIGRAMA&#xa;(Python 3.12 + Tkinter GUI / .bat Launcher)&#xa;- Escaneo incremental hash SHA-256&#xa;- Subida cifrada multi-hilo a Google Cloud" vertex="1">
-          <mxGeometry height="75" width="320" x="30" y="560" as="geometry" />
+          <mxGeometry height="75" width="300" x="30" y="560" as="geometry" />
         </mxCell>
         <mxCell id="edge_ai" parent="group_onprem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontStyle=1;fontSize=11;shadow=1;" value="🖐️ EDGE AI: CONTROL GESTUAL 3D&#xa;(Google MediaPipe Hands en Browser)&#xa;- Procesamiento local WebAssembly / WebGL&#xa;- 21 Articulaciones a 30-60 FPS (Sin uso de red)" vertex="1">
-          <mxGeometry height="70" width="320" x="30" y="730" as="geometry" />
+          <mxGeometry height="70" width="300" x="30" y="730" as="geometry" />
         </mxCell>
-        <mxCell id="flow_nas_sync" edge="1" parent="group_onprem" source="nas_storage" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ca8a04;strokeWidth=2;dashed=1;flowAnimation=1;fontSize=10;" target="sync_script" value="Lectura Carpetas SMB (:445)">
+        <mxCell id="flow_nas_sync" edge="1" parent="group_onprem" source="nas_storage" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ca8a04;strokeWidth=2;dashed=1;flowAnimation=1;fontSize=10;" target="sync_script" value="Lectura SMB (:445)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <!-- 2. ZONA PERÍMETRO Y SEGURIDAD -->
-        <mxCell id="group_edge" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;startSize=35;" value="🌐 SEGURIDAD Y PERÍMETRO DE TRÁFICO (INTERNET / TLS 1.3)" vertex="1">
-          <mxGeometry height="960" width="280" x="460" y="130" as="geometry" />
+        <!-- 2. ZONA PERÍMETRO Y BALANCEADOR DE CARGA -->
+        <mxCell id="group_edge" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;startSize=35;" value="🌐 PERÍMETRO DE RED &amp; BALANCEADOR GLOBAL" vertex="1">
+          <mxGeometry height="1060" width="280" x="430" y="140" as="geometry" />
         </mxCell>
-        <mxCell id="waf_gfe" parent="group_edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bfdbfe;strokeColor=#1d4ed8;fontStyle=1;fontSize=12;shadow=1;" value="🛡️ GOOGLE FRONT END (GFE)&#xa;&amp; CLOUD LOAD BALANCING&#xa;- Puerto 443 (HTTPS)&#xa;- Terminación TLS 1.3 Cifrada&#xa;- Mitigación DDoS / WAF&#xa;- Enrutamiento WebSockets / HTTP/2" vertex="1">
-          <mxGeometry height="110" width="240" x="20" y="152" as="geometry" />
+        <mxCell id="lb_box" parent="group_edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bfdbfe;strokeColor=#1d4ed8;fontStyle=1;fontSize=11;shadow=1;" value="⚖️ CLOUD LOAD BALANCER (GFE)&#xa;- Regla: lb-sigrama-forwarding-rule&#xa;- IP Pública: 136.81.184.225 (Puerto 80)&#xa;- Target Proxy: lb-sigrama-http-proxy&#xa;- URL Map: lb-sigrama-calidad&#xa;- Serverless NEG: neg-sigrama-app" vertex="1">
+          <mxGeometry height="110" width="240" x="20" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="signed_url_layer" parent="group_edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbcfe8;strokeColor=#db2777;fontStyle=1;fontSize=11;shadow=1;" value="🔑 CANAL DE ACCESO DIRECTO GCS&#xa;(Signed URLs con HMAC SHA-256)&#xa;- Descarga directa de archivos CAD (STEP/DXF)&#xa;- Sin sobrecargar la memoria del servidor&#xa;- Expiración efímera (15 min)" vertex="1">
+        <mxCell id="waf_gfe" parent="group_edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dbeafe;strokeColor=#2563eb;fontStyle=1;fontSize=11;shadow=1;" value="🛡️ SEGURIDAD GOOGLE FRONT END&#xa;- Terminación HTTP/2 y WSS&#xa;- Protección DDoS Google Cloud Armor&#xa;- Enrutamiento Anycast Global" vertex="1">
+          <mxGeometry height="75" width="240" x="20" y="195" as="geometry" />
+        </mxCell>
+        <mxCell id="signed_url_layer" parent="group_edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbcfe8;strokeColor=#db2777;fontStyle=1;fontSize=11;shadow=1;" value="🔑 CANAL DE ACCESO DIRECTO GCS&#xa;(Signed URLs con HMAC SHA-256)&#xa;- Descarga directa de modelos STEP/DXF&#xa;- Sin sobrecargar la memoria del servidor&#xa;- Expiración efímera (15 min)" vertex="1">
           <mxGeometry height="90" width="240" x="20" y="550" as="geometry" />
         </mxCell>
 
         <!-- 3. ZONA GOOGLE CLOUD PLATFORM -->
-        <mxCell id="group_gcp" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#fafafa;strokeColor=#dc2626;strokeWidth=2;startSize=35;" value="☁️ GOOGLE CLOUD PLATFORM (us-central1)" vertex="1">
-          <mxGeometry height="960" width="880" x="780" y="130" as="geometry" />
+        <mxCell id="group_gcp" parent="1" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#fafafa;strokeColor=#dc2626;strokeWidth=2;startSize=35;" value="☁️ GOOGLE CLOUD PLATFORM (us-central1) — Proyecto: sigrama-cloud-calidad" vertex="1">
+          <mxGeometry height="1060" width="1070" x="740" y="140" as="geometry" />
         </mxCell>
 
-        <!-- Cloud Run -->
-        <mxCell id="cloud_run" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=13;fontStyle=1;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;startSize=30;shadow=1;" value="🚀 GOOGLE CLOUD RUN (Serverless Container)&#xa;Servicio: 'control-dimensional-calidad' | Puerto Interno: 8080" vertex="1">
-          <mxGeometry height="420" width="820" x="30" y="60" as="geometry" />
+        <!-- SUB-CONTENEDOR VPC 2: vpc-sigrama-cloudrun -->
+        <mxCell id="vpc2_box" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;startSize=28;shadow=1;" value="🚀 VPC 2: 'vpc-sigrama-cloudrun' (Subred: 10.20.0.0/24 — us-central1)" vertex="1">
+          <mxGeometry height="430" width="560" x="30" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="streamlit_core" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#dc2626;fontStyle=1;fontSize=11;" value="🐍 STREAMLIT REACTIVE APP SERVER (Python 3.11)&#xa;- Gestión de Sesión y Estado UI (SessionState)&#xa;- WebSockets bidireccionales /_stcore/stream&#xa;- Puerto: 8080 (Mapeado desde GFE 443)" vertex="1">
-          <mxGeometry height="60" width="760" x="30" y="50" as="geometry" />
+        <!-- Cloud Run 1 -->
+        <mxCell id="cloud_run_1" parent="vpc2_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#dc2626;fontStyle=1;fontSize=11;" value="⚡ CLOUD RUN 1: 'sigrama-calidad-app' (Puerto :8080)&#xa;- Frontend Streamlit Reactivo (Hub 4.0, Inspección, Cotas Vernier)&#xa;- WebSocket bidireccional /_stcore/stream&#xa;- Identidad: streamlit-app-acceso@sigrama-cloud-calidad.iam.gserviceaccount.com" vertex="1">
+          <mxGeometry height="75" width="510" x="25" y="40" as="geometry" />
         </mxCell>
-        <mxCell id="mod_hub" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" value="📊 MÓDULO 0&#xa;Hub Central 4.0&#xa;(v0_hub.py)" vertex="1">
-          <mxGeometry height="60" width="135" x="30" y="130" as="geometry" />
+        <!-- Cloud Run 2 -->
+        <mxCell id="cloud_run_2" parent="vpc2_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#dc2626;fontStyle=1;fontSize=11;" value="🧊 CLOUD RUN 2: 'sigrama-calidad-prototipos' (Puerto :8080)&#xa;- Microservicio de Geometría CAD 3D y Conversión STEP/DXF&#xa;- Visor Autónomo de Prototipos de Ingeniería y Auditoría de Tolerancias&#xa;- Identidad: 500497385665-compute@developer.gserviceaccount.com" vertex="1">
+          <mxGeometry height="75" width="510" x="25" y="130" as="geometry" />
         </mxCell>
-        <mxCell id="mod_cad" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" value="🧊 MÓDULO 3.1&#xa;Visor 3D Three.js&#xa;(v3_1_cad_viewer.py)" vertex="1">
-          <mxGeometry height="60" width="135" x="185" y="130" as="geometry" />
+        <!-- SQLite In-Container -->
+        <mxCell id="sqlite_local" parent="vpc2_box" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e0f2fe;strokeColor=#0284c7;fontStyle=1;fontSize=11;" value="🗄️ SQLITE3 MOTOR IN-CONTAINER (data/sigrama_calidad.db)&#xa;- PRAGMA journal_mode = WAL (Write-Ahead Logging de alto rendimiento)&#xa;- PRAGMA busy_timeout = 60000 | Concurrencia de lecturas simultáneas&#xa;- Sincronización bidireccional automática con Cloud Storage" vertex="1">
+          <mxGeometry height="75" width="510" x="25" y="225" as="geometry" />
         </mxCell>
-        <mxCell id="mod_audit" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" value="📋 MÓDULO 3.2&#xa;Auditoría Técnica&#xa;(v3_2_design.py)" vertex="1">
-          <mxGeometry height="60" width="135" x="340" y="130" as="geometry" />
-        </mxCell>
-        <mxCell id="mod_insp" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" value="📐 MÓDULO 3.3 / 4.2&#xa;Inspección Dimensional&#xa;(v3_3_capture.py)" vertex="1">
-          <mxGeometry height="60" width="135" x="495" y="130" as="geometry" />
-        </mxCell>
-        <mxCell id="mod_rep" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" value="📑 MÓDULO 3.4 / 4.3&#xa;Reportes y Remisión&#xa;(v3_3_remision.py)" vertex="1">
-          <mxGeometry height="60" width="135" x="650" y="130" as="geometry" />
-        </mxCell>
-        <mxCell id="sqlite_local" parent="cloud_run" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e0f2fe;strokeColor=#0284c7;fontStyle=1;fontSize=11;" value="🗄️ SQLITE3 MOTOR IN-CONTAINER (data/sigrama_calidad.db)&#xa;- PRAGMA journal_mode = WAL (Write-Ahead Logging de alto rendimiento)&#xa;- PRAGMA busy_timeout = 60000 | Concurrencia de lecturas simultáneas&#xa;- Sincronización bidireccional automática con Cloud Storage" vertex="1">
-          <mxGeometry height="75" width="760" x="30" y="210" as="geometry" />
-        </mxCell>
-        <mxCell id="service_gcs" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;fontSize=10;" value="🔐 GCS Storage Client (src/services/gcs_storage.py)&#xa;Service Account HMAC Signer / Resolver" vertex="1">
-          <mxGeometry height="50" width="370" x="30" y="310" as="geometry" />
-        </mxCell>
-        <mxCell id="service_excel" parent="cloud_run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;fontSize=10;" value="📊 Generador Excel Multisede (src/audit_excel.py)&#xa;Reporte de Faltantes &amp; Auditoría General" vertex="1">
-          <mxGeometry height="50" width="370" x="420" y="310" as="geometry" />
+        <mxCell id="connector_vpc" parent="vpc2_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;fontSize=10;" value="🔌 Serverless VPC Access Connector / Direct VPC Egress (10.20.0.0/24)" vertex="1">
+          <mxGeometry height="40" width="510" x="25" y="320" as="geometry" />
         </mxCell>
 
-        <!-- Cloud Storage -->
-        <mxCell id="gcs_bucket" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=13;fontStyle=1;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;startSize=30;shadow=1;" value="🪣 GOOGLE CLOUD STORAGE BUCKET (gs://sigrama-planos-calidad-2026)&#xa;Almacenamiento Objeto Cifrado AES-256 (Default KMS) | SLA 99.95%" vertex="1">
-          <mxGeometry height="240" width="820" x="30" y="514" as="geometry" />
+        <!-- SUB-CONTENEDOR VPC 1: vpc-sigrama-vm -->
+        <mxCell id="vpc1_box" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#e0f2fe;strokeColor=#0284c7;strokeWidth=2;startSize=28;shadow=1;" value="🖥️ VPC 1: 'vpc-sigrama-vm' (Subred: 10.10.0.0/24 — us-central1)" vertex="1">
+          <mxGeometry height="430" width="430" x="610" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="gcs_db_backup" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" value="💾 system/sigrama_calidad.db&#xa;(Persistencia de Estado / Transacciones)" vertex="1">
-          <mxGeometry height="60" width="360" x="30" y="50" as="geometry" />
+        <mxCell id="vm_instance" parent="vpc1_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#0284c7;fontStyle=1;fontSize=11;" value="💻 MÁQUINA VIRTUAL COMPUTE ENGINE&#xa;Nombre: 'vm-sigrama-backend' (e2-medium)&#xa;- IP Privada: 10.10.0.5 (Sin IP externa obligatoria)&#xa;- Servidor de Base de Datos Interna / Archivo Maestro&#xa;- Regla Firewall: allow-internal (SSH :22, SMB :445, ICMP)&#xa;- Resguardo de planos de ingeniería de respaldo" vertex="1">
+          <mxGeometry height="110" width="380" x="25" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="gcs_models" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" value="🧊 Auditadas/ &amp; Sin_Auditar/&#xa;(Archivos STEP 3D, DXF, SLDPRT, SLDDRW)" vertex="1">
-          <mxGeometry height="60" width="370" x="420" y="50" as="geometry" />
+        <!-- Peering Box en VPC 1 -->
+        <mxCell id="peering_node" parent="vpc1_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cffafe;strokeColor=#0891b2;fontStyle=1;fontSize=11;" value="🔗 VPC NETWORK PEERING (SDN Andromeda)&#xa;- peer-vm-to-cloudrun ⇄ peer-cloudrun-to-vm&#xa;- Estado: ACTIVE (Connected)&#xa;- Rutas automáticas entre 10.10.0.0/24 y 10.20.0.0/24&#xa;- Tráfico 100% privado interno (Cero salida a Internet)" vertex="1">
+          <mxGeometry height="100" width="380" x="25" y="190" as="geometry" />
         </mxCell>
-        <mxCell id="gcs_blueprints" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" value="📄 Planos_PDF/&#xa;(Planos de Control SIGRAMA y Cliente)" vertex="1">
-          <mxGeometry height="60" width="360" x="30" y="140" as="geometry" />
+
+        <!-- SUB-CONTENEDOR CLOUD STORAGE -->
+        <mxCell id="gcs_bucket" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;startSize=28;shadow=1;" value="🪣 CLOUD STORAGE BUCKET: gs://sigrama-planos-calidad-2026 (Cifrado AES-256)" vertex="1">
+          <mxGeometry height="220" width="560" x="30" y="510" as="geometry" />
         </mxCell>
-        <mxCell id="gcs_specs" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" value="📊 Especificaciones_Excel/&#xa;(Hojas de Tolerancias de Doblez y Corte)" vertex="1">
-          <mxGeometry height="60" width="370" x="420" y="140" as="geometry" />
+        <mxCell id="gcs_db_backup" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=10;" value="💾 system/sigrama_calidad.db&#xa;(Persistencia de Estado / Transacciones)" vertex="1">
+          <mxGeometry height="60" width="240" x="20" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="gcs_models" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=10;" value="🧊 Auditadas/ &amp; Sin_Auditar/&#xa;(STEP 3D, DXF, SLDPRT, SLDDRW)" vertex="1">
+          <mxGeometry height="60" width="250" x="280" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="gcs_blueprints" parent="gcs_bucket" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=10;" value="📄 Planos_PDF/ y Tolerancias Excel" vertex="1">
+          <mxGeometry height="50" width="510" x="20" y="125" as="geometry" />
+        </mxCell>
+
+        <!-- SUB-CONTENEDOR IAM: GESTIÓN DE ROLES Y CUENTAS -->
+        <mxCell id="iam_box" parent="group_gcp" style="swimlane;whiteSpace=wrap;html=1;fontSize=12;fontStyle=1;fillColor=#fef9c3;strokeColor=#ca8a04;strokeWidth=2;startSize=28;shadow=1;" value="🛡️ IAM &amp; SEGURIDAD DE IDENTIDAD: ROLES PERSONALIZADOS (CUSTOM ROLES)" vertex="1">
+          <mxGeometry height="220" width="430" x="610" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="custom_role_card" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fef08a;strokeColor=#ca8a04;fontStyle=1;fontSize=10;" value="⭐ ROL PERSONALIZADO: sigrama_calidad_operador&#xa;Usuario Asignado: user:jesus_aml@hotmail.com&#xa;- run.services.get, run.services.list&#xa;- storage.buckets.get, storage.objects.get, storage.objects.create&#xa;- compute.networks.get, compute.instances.get&#xa;* Cumple Principio de Menor Privilegio (PoLP)" vertex="1">
+          <mxGeometry height="95" width="380" x="25" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="sa_comparison_card" parent="iam_box" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ca8a04;fontSize=9;" value="👤 Cuentas de Usuario: jesus_aml@hotmail.com | jesus.alberto...@gmail.com&#xa;🤖 Cuentas de Servicio: streamlit-app-acceso@... (Storage Admin)&#xa;  500497385665-compute@developer.gserviceaccount.com (Run Admin)" vertex="1">
+          <mxGeometry height="50" width="380" x="25" y="145" as="geometry" />
         </mxCell>
 
         <!-- CI/CD GitHub & Cloud Build -->
-        <mxCell id="cicd_box" parent="group_gcp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontStyle=1;fontSize=11;shadow=1;" value="🔄 CI/CD PIPELINE: GITHUB ➔ GOOGLE CLOUD BUILD ➔ ARTIFACT REGISTRY&#xa;- Trigger automático en push a &#39;main&#39;&#xa;- Construcción multi-stage Dockerfile con optimización de capas de caché&#xa;- Despliegue sin tiempo de inactividad (Zero Downtime Revisions) en Cloud Run" vertex="1">
-          <mxGeometry height="70" width="820" x="30" y="800" as="geometry" />
-        </mxCell>
-        <mxCell id="flow_cicd_deploy" edge="1" parent="group_gcp" source="cicd_box" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9333ea;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="cloud_run" value="Zero-Downtime Deployment">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="cicd_box" parent="group_gcp" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontStyle=1;fontSize=11;shadow=1;" value="🔄 CI/CD PIPELINE: GITHUB ➔ GOOGLE CLOUD BUILD ➔ ARTIFACT REGISTRY&#xa;- Trigger automático en push a &#39;main&#39; con despliegue Zero-Downtime a Cloud Run 1 y Cloud Run 2" vertex="1">
+          <mxGeometry height="60" width="1010" x="30" y="750" as="geometry" />
         </mxCell>
 
         <!-- CONECTORES CON ANIMACIÓN DE FLUJO (flowAnimation=1) -->
-        <mxCell id="flow_clients_gfe" edge="1" parent="1" source="client_engineer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;strokeWidth=3;fontSize=11;fontStyle=1;dashed=1;flowAnimation=1;" target="waf_gfe" value="HTTPS :443 (TLS 1.3 / WSS) [Datos UI / WebSockets]">
+        <mxCell id="flow_clients_lb" edge="1" parent="1" source="client_engineer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;strokeWidth=3;fontSize=11;fontStyle=1;dashed=1;flowAnimation=1;" target="lb_box" value="HTTP :80 (IP: 136.81.184.225) [Tráfico UI WebSockets]">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flow_gfe_cr" edge="1" parent="1" source="waf_gfe" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#16a34a;strokeWidth=3;fontSize=11;fontStyle=1;dashed=1;flowAnimation=1;" target="streamlit_core" value="HTTP :8080 (VPC Interna) [Tráfico Descifrado]">
+        <mxCell id="flow_lb_cr1" edge="1" parent="1" source="lb_box" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#16a34a;strokeWidth=3;fontSize=10;fontStyle=1;dashed=1;flowAnimation=1;" target="cloud_run_1" value="Serverless NEG :8080 (Cloud Run 1: App)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flow_sync_gcs" edge="1" parent="1" source="sync_script" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ea580c;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=11;fontStyle=1;" target="gcs_bucket" value="GCS REST API :443 (Upload Prototipos Hash SHA-256)">
+        <mxCell id="flow_lb_cr2" edge="1" parent="1" source="lb_box" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#16a34a;strokeWidth=2;fontSize=10;dashed=1;flowAnimation=1;" target="cloud_run_2" value="Ruta /prototipos (Cloud Run 2)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow_peering" edge="1" parent="1" source="connector_vpc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0891b2;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="peering_node" value="VPC Peering (10.20.0.0/24 ⇄ 10.10.0.0/24)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="flow_sync_gcs" edge="1" parent="1" source="sync_script" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ea580c;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="gcs_bucket" value="GCS REST API :443 (Upload Hash SHA-256)">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="430" y="730" />
-              <mxPoint x="430" y="690" />
+              <mxPoint x="400" y="730" />
+              <mxPoint x="400" y="700" />
+              <mxPoint x="720" y="700" />
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="flow_db_backup" edge="1" parent="1" source="sqlite_local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d97706;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="gcs_db_backup" value="Sync Bidireccional DB (save_database_to_gcs)">
+        <mxCell id="flow_db_backup" edge="1" parent="1" source="sqlite_local" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d97706;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="gcs_db_backup" value="Sync WAL DB">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flow_signed_url" edge="1" parent="1" source="gcs_bucket" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=11;fontStyle=1;" target="signed_url_layer" value="Descarga Directa Cifrada (Signed URLs GET :443)">
+        <mxCell id="flow_signed_url" edge="1" parent="1" source="gcs_bucket" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="signed_url_layer" value="Signed URLs GET :443">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="flow_signed_to_client" edge="1" parent="1" source="signed_url_layer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=11;fontStyle=1;" target="edge_ai" value="STEP 3D / DXF Streaming al Navegador">
+        <mxCell id="flow_signed_to_client" edge="1" parent="1" source="signed_url_layer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=3;dashed=1;flowAnimation=1;fontSize=10;fontStyle=1;" target="edge_ai" value="STEP 3D Streaming al Navegador">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
