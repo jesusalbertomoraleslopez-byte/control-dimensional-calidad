@@ -1,0 +1,170 @@
+<mxfile host="app.diagrams.net" modified="2026-10-02T22:15:00.000Z" agent="Mozilla/5.0" version="24.7.17">
+  <diagram id="sigrama-arch-2026" name="Arquitectura Cloud Run y Calidad 4.0 - SIGRAMA">
+    <mxGraphModel dx="1422" dy="842" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- BOUNDARY: PLANTA INDUSTRIAL SIGRAMA (ON-PREMISES) -->
+        <mxCell id="group_onprem" value="🏭 PLANTA INDUSTRIAL SIGRAMA (ON-PREMISES LAN)" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#f8fafc;strokeColor=#64748b;strokeWidth=2;startSize=30;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="380" height="960" as="geometry" />
+        </mxCell>
+
+        <!-- Operador / Calidad -->
+        <mxCell id="client_operator" value="👷 INSPECTOR DE CALIDAD EN PISO&#xa;(Tablet / PC Industrial)&#xa;- Inspección Dimensional (Vernier/CMM)&#xa;- Captura de Cotas / Liberación de Lote" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="60" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Ingeniero de Diseno -->
+        <mxCell id="client_engineer" value="📐 INGENIERO DE DISEÑO (SolidWorks / CAD)&#xa;(Workstation Local)&#xa;- Exportación DXF, STEP, Planos PDF&#xa;- Sincronización Prototipos a la Nube" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="160" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Administrador de Calidad -->
+        <mxCell id="client_admin" value="🛡️ ADMINISTRADOR DE CALIDAD&#xa;(Oficina Técnica)&#xa;- Auditoría de Planos y Matriz de Faltantes&#xa;- Exportación Excel para Ingeniería / Remisiones" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e2e8f0;strokeColor=#475569;fontSize=11;fontStyle=1;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="260" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- Servidor de Archivos SMB / Red Local -->
+        <mxCell id="nas_storage" value="📁 REPOSITORIO LOCAL DE PLANOS (SMB / NAS)&#xa;Z:\02 - INGENIERIA\BASE DE DATOS PRODUCTOS\&#xa;- Planos Originales Cliente, DXF CNC, Modelos SLD" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#fef08a;strokeColor=#ca8a04;fontStyle=1;fontSize=11;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="440" width="320" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Sincronizador Local -->
+        <mxCell id="sync_script" value="⚡ SINCRONIZADOR DE PROTOTIPOS SIGRAMA&#xa;(Python 3.12 + Tkinter GUI / .bat Launcher)&#xa;- Escaneo incremental hash SHA-256&#xa;- Subida cifrada multi-hilo a Google Cloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fed7aa;strokeColor=#ea580c;fontStyle=1;fontSize=11;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="560" width="320" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- Edge Hand Tracking -->
+        <mxCell id="edge_ai" value="🖐️ EDGE AI: CONTROL GESTUAL 3D&#xa;(Google MediaPipe Hands en Browser)&#xa;- Procesamiento local WebAssembly / WebGL&#xa;- 21 Articulaciones a 30-60 FPS (Sin uso de red)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dcfce7;strokeColor=#16a34a;fontStyle=1;fontSize=11;" vertex="1" parent="group_onprem">
+          <mxGeometry x="30" y="730" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- BOUNDARY: SEGURIDAD Y PERÍMETRO DE RED -->
+        <mxCell id="group_edge" value="🌐 SEGURIDAD Y PERÍMETRO DE TRÁFICO (INTERNET / TLS 1.3)" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#eff6ff;strokeColor=#2563eb;strokeWidth=2;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="460" y="80" width="280" height="960" as="geometry" />
+        </mxCell>
+
+        <mxCell id="waf_gfe" value="🛡️ GOOGLE FRONT END (GFE)&#xa;&amp; CLOUD LOAD BALANCING&#xa;- Puerto 443 (HTTPS)&#xa;- Terminación TLS 1.3 Cifrada&#xa;- Mitigación DDoS / WAF&#xa;- Enrutamiento WebSockets / HTTP/2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bfdbfe;strokeColor=#1d4ed8;fontStyle=1;fontSize=12;" vertex="1" parent="group_edge">
+          <mxGeometry x="20" y="200" width="240" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="signed_url_layer" value="🔑 CANAL DE ACCESO DIRECTO GCS&#xa;(Signed URLs con HMAC SHA-256)&#xa;- Descarga directa de archivos CAD (STEP/DXF)&#xa;- Sin sobrecargar la memoria del servidor&#xa;- Expiración efímera (15 min)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fbcfe8;strokeColor=#db2777;fontStyle=1;fontSize=11;" vertex="1" parent="group_edge">
+          <mxGeometry x="20" y="550" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- BOUNDARY: GOOGLE CLOUD PLATFORM (PROJECT: SIGRAMA-CALIDAD) -->
+        <mxCell id="group_gcp" value="☁️ GOOGLE CLOUD PLATFORM (us-central1)" style="swimlane;whiteSpace=wrap;html=1;fontSize=14;fontStyle=1;fillColor=#fafafa;strokeColor=#dc2626;strokeWidth=2;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="780" y="80" width="820" height="960" as="geometry" />
+        </mxCell>
+
+        <!-- CONTENEDOR CLOUD RUN -->
+        <mxCell id="cloud_run" value="🚀 GOOGLE CLOUD RUN (Serverless Container)&#xa;Servicio: 'control-dimensional-calidad' | Puerto Interno: 8080" style="swimlane;whiteSpace=wrap;html=1;fontSize=13;fontStyle=1;fillColor=#fee2e2;strokeColor=#dc2626;strokeWidth=2;startSize=30;" vertex="1" parent="group_gcp">
+          <mxGeometry x="30" y="60" width="760" height="420" as="geometry" />
+        </mxCell>
+
+        <!-- Streamlit App Server -->
+        <mxCell id="streamlit_core" value="🐍 STREAMLIT REACTIVE APP SERVER (Python 3.11)&#xa;- Gestión de Sesión y Estado UI (SessionState)&#xa;- WebSockets bidireccionales /_stcore/stream&#xa;- Puerto: 8080 (Mapeado desde GFE 443)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#dc2626;fontStyle=1;fontSize=11;" vertex="1" parent="cloud_run">
+          <mxGeometry x="30" y="50" width="700" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Modulos de Negocio -->
+        <mxCell id="mod_hub" value="📊 MÓDULO 0&#xa;Hub Central 4.0&#xa;(v0_hub.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" vertex="1" parent="cloud_run">
+          <mxGeometry x="30" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mod_cad" value="🧊 MÓDULO 3.1&#xa;Visor 3D Three.js&#xa;(v3_1_cad_viewer.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" vertex="1" parent="cloud_run">
+          <mxGeometry x="175" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mod_audit" value="📋 MÓDULO 3.2&#xa;Auditoría Técnica&#xa;(v3_2_design.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" vertex="1" parent="cloud_run">
+          <mxGeometry x="320" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mod_insp" value="📐 MÓDULO 3.3 / 4.2&#xa;Inspección Dimensional&#xa;(v3_3_capture.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" vertex="1" parent="cloud_run">
+          <mxGeometry x="465" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mod_rep" value="📑 MÓDULO 3.4 / 4.3&#xa;Reportes y Remisión&#xa;(v3_3_remision.py)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f1f5f9;strokeColor=#64748b;fontSize=10;fontStyle=1;" vertex="1" parent="cloud_run">
+          <mxGeometry x="610" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Base de Datos SQLite Local -->
+        <mxCell id="sqlite_local" value="🗄️ SQLITE3 MOTOR IN-CONTAINER (data/sigrama_calidad.db)&#xa;- PRAGMA journal_mode = WAL (Write-Ahead Logging de alto rendimiento)&#xa;- PRAGMA busy_timeout = 60000 | Concurrencia de lecturas simultáneas&#xa;- Sincronización bidireccional automática con Cloud Storage" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e0f2fe;strokeColor=#0284c7;fontStyle=1;fontSize=11;" vertex="1" parent="cloud_run">
+          <mxGeometry x="30" y="210" width="700" height="75" as="geometry" />
+        </mxCell>
+
+        <!-- GCS Service Layer & Generador Excel -->
+        <mxCell id="service_gcs" value="🔐 GCS Storage Client (src/services/gcs_storage.py)&#xa;Service Account HMAC Signer / Resolver" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;fontSize=10;" vertex="1" parent="cloud_run">
+          <mxGeometry x="30" y="310" width="340" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="service_excel" value="📊 Generador Excel Multisede (src/audit_excel.py)&#xa;Reporte de Faltantes &amp; Auditoría General" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ede9fe;strokeColor=#7c3aed;fontStyle=1;fontSize=10;" vertex="1" parent="cloud_run">
+          <mxGeometry x="390" y="310" width="340" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- PERSISTENCIA GCS BUCKET -->
+        <mxCell id="gcs_bucket" value="🪣 GOOGLE CLOUD STORAGE BUCKET (gs://sigrama-planos-calidad-2026)&#xa;Almacenamiento Objeto Cifrado AES-256 (Default KMS) | SLA 99.95%" style="swimlane;whiteSpace=wrap;html=1;fontSize=13;fontStyle=1;fillColor=#fef3c7;strokeColor=#d97706;strokeWidth=2;startSize=30;" vertex="1" parent="group_gcp">
+          <mxGeometry x="30" y="520" width="760" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gcs_db_backup" value="💾 system/sigrama_calidad.db&#xa;(Persistencia de Estado / Transacciones)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" vertex="1" parent="gcs_bucket">
+          <mxGeometry x="30" y="50" width="330" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gcs_models" value="🧊 Auditadas/ &amp; Sin_Auditar/&#xa;(Archivos STEP 3D, DXF, SLDPRT, SLDDRW)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" vertex="1" parent="gcs_bucket">
+          <mxGeometry x="390" y="50" width="340" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gcs_blueprints" value="📄 Planos_PDF/&#xa;(Planos de Control SIGRAMA y Cliente)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" vertex="1" parent="gcs_bucket">
+          <mxGeometry x="30" y="140" width="330" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="gcs_specs" value="📊 Especificaciones_Excel/&#xa;(Hojas de Tolerancias de Doblez y Corte)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d97706;fontStyle=1;fontSize=11;" vertex="1" parent="gcs_bucket">
+          <mxGeometry x="390" y="140" width="340" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- CI/CD CLOUD BUILD -->
+        <mxCell id="cicd_box" value="🔄 CI/CD PIPELINE: GITHUB ➔ CLOUD BUILD ➔ ARTIFACT REGISTRY&#xa;- Trigger automático en push a 'main'&#xa;- Construcción multi-stage Dockerfile con optimización de caché&#xa;- Despliegue sin tiempo de inactividad (Zero Downtime Revisions) en Cloud Run" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3e8ff;strokeColor=#9333ea;fontStyle=1;fontSize=11;" vertex="1" parent="group_gcp">
+          <mxGeometry x="30" y="800" width="760" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- CONECTORES / FLECHAS DE FLUJO -->
+        <!-- Clientes a GFE -->
+        <mxCell id="flow_clients_gfe" value="HTTPS :443 (TLS 1.3 / WSS)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#2563eb;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="client_engineer" target="waf_gfe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- GFE a Cloud Run -->
+        <mxCell id="flow_gfe_cr" value="HTTP :8080 (VPC Interna)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#16a34a;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="waf_gfe" target="streamlit_core">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Sincronizador a GCS -->
+        <mxCell id="flow_sync_gcs" value="GCS REST API :443&#xa;(Carga por lotes)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#ea580c;strokeWidth=2;dashed=1;fontSize=11;fontStyle=1;" edge="1" parent="1" source="sync_script" target="gcs_bucket">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="430" y="680" />
+              <mxPoint x="430" y="720" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- SQLite a GCS Backup -->
+        <mxCell id="flow_db_backup" value="Sync Bidireccional DB&#xa;(save_database_to_gcs)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d97706;strokeWidth=2;dashed=1;fontSize=10;fontStyle=1;" edge="1" parent="1" source="sqlite_local" target="gcs_db_backup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- GCS a Signed URL Layer -->
+        <mxCell id="flow_signed_url" value="Descarga Directa Cifrada&#xa;(Signed URLs GET :443)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="gcs_bucket" target="signed_url_layer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="flow_signed_to_client" value="STEP 3D / DXF Streaming" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#db2777;strokeWidth=2;fontSize=11;fontStyle=1;" edge="1" parent="1" source="signed_url_layer" target="edge_ai">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
