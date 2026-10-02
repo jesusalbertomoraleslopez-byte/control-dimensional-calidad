@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIGRAMA 4.0 — Arquitectura Ciberfísica Interactiva y Animada</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+    body { background: #070b14; color: #f1f5f9; overflow-x: hidden; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Banner Superior Amigable */
+    header {
+      background: linear-gradient(135deg, #0b1329 0%, #1e1b4b 50%, #0f172a 100%);
+      padding: 1rem 2rem;
+      border-bottom: 2px solid #ef4444;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      position: relative;
+      z-index: 50;
+    }
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .logo-sigrama-box {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .logo-sigrama-box img {
+      height: 38px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 8px rgba(255,255,255,0.2));
+    }
+    .title-box h1 {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title-box p {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+    .badge-bar {
+      display: flex;
+      gap: 8px;
+      margin-top: 5px;
+    }
+    .tech-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #e2e8f0;
+      text-decoration: none;
+    }
+    .tech-pill.gcp { border-color: rgba(66, 133, 244, 0.4); background: rgba(66, 133, 244, 0.15); color: #93c5fd; }
+    .tech-pill.github { border-color: rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+    .tech-pill.streamlit { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.15); color: #fca5a5; }
+    .tech-pill.status { border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+
+    /* Controles de Animación */
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid #334155;
+    }
+    .btn-ctrl {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-ctrl:hover { background: #334155; border-color: #38bdf8; transform: translateY(-1px); }
+    .btn-ctrl.active { background: #ef4444; border-color: #dc2626; color: #fff; box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+
+    /* Canvas / Viewport */
+    .viewport {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 840px;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #111a30 0%, #050811 100%);
+    }
+
+    svg.network-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Cables y conexiones animadas */
+    .wire {
+      fill: none;
+      stroke-width: 3.5;
+      stroke-linecap: round;
+      stroke-dasharray: 8 6;
+      animation: dashMove 1.4s linear infinite;
+      filter: drop-shadow(0 0 4px currentColor);
+    }
+    .wire.blue { stroke: #38bdf8; color: #38bdf8; }
+    .wire.green { stroke: #10b981; color: #10b981; }
+    .wire.orange { stroke: #f97316; color: #f97316; }
+    .wire.magenta { stroke: #ec4899; color: #ec4899; }
+    .wire.purple { stroke: #a855f7; color: #a855f7; }
+
+    @keyframes dashMove {
+      from { stroke-dashoffset: 28; }
+      to { stroke-dashoffset: 0; }
+    }
+
+    /* Paquetes que viajan con texto */
+    .packet-bubble {
+      position: absolute;
+      z-index: 25;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #ffffff;
+      white-space: nowrap;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 16px currentColor, 0 4px 10px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.2s;
+    }
+    .bubble-blue { background: #0284c7; border: 1.5px solid #38bdf8; color: #ffffff; }
+    .bubble-green { background: #059669; border: 1.5px solid #34d399; color: #ffffff; }
+    .bubble-orange { background: #ea580c; border: 1.5px solid #fb923c; color: #ffffff; }
+    .bubble-magenta { background: #db2777; border: 1.5px solid #f472b6; color: #ffffff; }
+    .bubble-purple { background: #7c3aed; border: 1.5px solid #c084fc; color: #ffffff; }
+
+    /* Zonas Arquitectónicas */
+    .zone {
+      position: absolute;
+      border-radius: 16px;
+      padding: 18px;
+      z-index: 5;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .zone-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .zone-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .zone-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Zona 1: Planta */
+    #zone-planta {
+      top: 30px;
+      left: 30px;
+      width: 330px;
+      height: 780px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 2px dashed #475569;
+    }
+    #zone-planta .zone-title { color: #cbd5e1; }
+
+    /* Zona 2: Perímetro de Red */
+    #zone-perimeter {
+      top: 30px;
+      left: 390px;
+      width: 270px;
+      height: 780px;
+      background: rgba(30, 58, 138, 0.22);
+      border: 2px solid #2563eb;
+    }
+    #zone-perimeter .zone-title { color: #60a5fa; }
+
+    /* Zona 3: Google Cloud Platform */
+    #zone-gcp {
+      top: 30px;
+      left: 690px;
+      right: 30px;
+      height: 780px;
+      background: rgba(220, 38, 38, 0.08);
+      border: 2px solid #ef4444;
+    }
+    #zone-gcp .zone-title { color: #f87171; }
+
+    /* Tarjetas Interactivas */
+    .node-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .node-card:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      border-color: #38bdf8;
+      background: #273549;
+    }
+    .node-card h3 { font-size: 0.85rem; font-weight: 700; color: #ffffff; display: flex; align-items: center; justify-content: space-between; }
+    .node-card p { font-size: 0.74rem; color: #94a3b8; margin-top: 4px; line-height: 1.35; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+    
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .badge-lan { background: #334155; color: #cbd5e1; }
+    .badge-https { background: #1e3a8a; color: #93c5fd; }
+    .badge-gcp { background: #7f1d1d; color: #fca5a5; }
+    .badge-ai { background: #064e3b; color: #6ee7b7; }
+    .badge-gcs { background: #78350f; color: #fde68a; }
+    .badge-github { background: #3b0764; color: #e9d5ff; }
+
+    /* Cajas anidadas GCP */
+    .gcp-box {
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .gcp-box.cloudrun { border: 1.5px solid #ef4444; }
+    .gcp-box.gcs { border: 1.5px solid #f59e0b; }
+    .gcp-box.cicd { border: 1.5px solid #a855f7; }
+
+    /* Footer / Leyenda Amigable */
+    footer {
+      background: #090d16;
+      border-top: 1px solid #1e293b;
+      padding: 12px 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+    .legend { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px currentColor; }
+
+    /* Tooltip / Modal Explicativo Amigable */
+    #info-modal {
+      position: absolute;
+      bottom: 25px;
+      right: 25px;
+      width: 360px;
+      background: rgba(15, 23, 42, 0.96);
+      border: 2px solid #38bdf8;
+      border-radius: 12px;
+      padding: 16px;
+      z-index: 100;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.8);
+      display: none;
+      backdrop-filter: blur(10px);
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    #info-modal h4 { color: #38bdf8; font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    #info-modal p { font-size: 0.82rem; color: #cbd5e1; line-height: 1.45; }
+    #info-modal .modal-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+    #info-modal .modal-close:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+  <!-- ENCABEZADO SUPERIOR CON LOGOS Y TÍTULO -->
+  <header>
+    <div class="brand-section">
+      <div class="logo-sigrama-box" title="SIGRAMA Automatización">
+        <img src="data:image/png;base64,﻿iVBORw0KGgoAAAANSUhEUgAABAAAAADKCAYAAAA7ITJCAAABC2lDQ1BJQ0MgUHJvZmlsZQAAeJyVkLFOwlAUhr+LJILBOMjAwNCBgUWCDsaBCYaGzRRJKE5tKV2gbW5rfAHZGFjZiItvIK/ghomJg5OPQEh0NtdqysLAmb785885/zkgXgCydRj7sTT0ptYz+9rhJwKhOmA5UcjuEvD9nnjfzti/8gM3coA1UJE9sw+iCBS9hKuK7YQbiu/jMAZxrVjeGC0QA6DqbbG9xU4olX8KNMajO7XrLzcF1+92gBxQJsJAp6nuTyzBI1x9wcEs1ew5LCdQ+ki1ygJOHuB5lWrpT0JLWr9SFsgMh7B5gmMTTl/h6Pb/ETuyqXlldAICPEa4aLTxcaihcUGdcy5/AKbWPz8bOFjoAAAYPElEQVR4nO3d2ZIbubEAULVC///LutG2+4pqcakqYsnlnBc7JkajQiKxJcHix48fP378/v379+f/wkofHx8fIg4AALDGz0V/DwAAALCRAgBb+PQfAABgrV+L/z6ac/AHAADYQwGA6Rz6Ya5H73Ex9gAAuKUAwFAOHGM9e0GnWAOwkmIjQH4KAFzmAAoAAJCHAgCnOPQDMIJPkwFgPQUAnnLg3x//Z18DAAAAOEoBgLsc/AEAAGpRAMBhPyEFGgAisB4B5KIA0JDFOhf9BUAE1iOA/BQAmrBoAwAA9KYAUJQDPwAAALcUAIpw4AcAAOAZBYDkHPyp4tnPHXbJczHgTF50GRfd+li/7u+DW/oDqOY/mwe/Mx6fBaive+MzQz4c2UxdmXsytP2MszG41/6sG9cZuZ01Ft9VHRuj9huR23omr7MV/TqPr6xtBfjODYDALDI827xkz4+rG7AKbX+3/Z//WyEGlft3x8Ekem50+LDhaBtf/XtR+zC7ETkYfZwBvPLz5b/BFhYWKufHu5uw7AeJkZtQ6hjVp3IjNv1TI+76EcjKDYCNsh/i2Cfzp6QjDzkZYzBy05h5A5r52TPIOj6qO3NDQP/Fp5+AjNwAWOzjxuq/mzrkT85D5JnnrT5PVG7bFUeuhJ/JCfGNJ9t8xTH6FcjGDYAFbMTg+viosrk60o57sXj3pYnk9ionMuXF0eeuuGYe7aOKbY/iM7ZXXzyaZYwBHKEAMIlFHMaMk0ebtkrOfqpbPR7dvHsQ/p4X1p9c9Ff8mL+ae30VAMhEAWAAizerVdhsnHn+Z0WADLEY/VNfHYoinBd9HPA3/bWemAMoAFg8wCZsqlm/8529CJD52eFdDqI5ZZ93AT55CeABXtwH+ze+NsxABeaymv2nMABkoQDwgEM/EP0Q4CBRmwNFPcYsALt5B8D/WJSB0RzgGPGOi9t/T0Rh3xxtDAIVtCwAmMCBKnwntQ/FABg/llb8OYBI2hQAHPqBKMxH3MuJM4cLxYB8jPv9HOABChcALLQAdLjN8fVnrHvwepwAdFeqAGDzA0DXr3QoBMDzsQFAgQKAQz9APt5d8Dw2X///6o0Aa2Ms+mOfI2PoSP8oIgBVpCoAWEAB6OTdYgBwfIwZi0AH4QsADv1ANSM/oXUo7ONMMcAtAHg+Tuwvga7CFQBMyEAVrrkzM7c+/1cBCABIUwBw2Ae6GvEJrcMfCgFwnv0n0NnyAoBJF4AZFESA2cwzQHY/Vxz4b83++wA6bCQrb0Kvvvn+R2LvPr/1FQDYVgBw4Af4Mx8+i0XHwy73+1NBCNa4OtbMvUAFQwoAPuWHtXzaV8uZTWWXDejRdn7+e5VicqU9ldpfsT3E1H2cAX1degeAwwfAuTnzyM+2PZtfK24+X8XlWUyqxONRO27/+bM1t0ocjvT90ZjAmTlmxi0tgPAFgFcTpIUWYvEb33V/EtBmU0xG5ESVddt4QI4BTPgKgMM/wHwzDmXZD3rZn5/r9D0ryDOAOwWAV9cLVeAB4m1Gq2xsR7UjYzxm/EJOpjhkelbyMu8CnLgB8L0QcOvVnwFgzma02sHp3fZkj8eoQkDGOGR8ZvLpOr4AhrwE8IsX8sAeXTchR79Hn8Gjl5ud+XPVfLWtczyuxOD2z3Vod/a2sk/X8QVw69JEeITJEuAaxVXxeJYb1lcYy5wLdHLpE6jTf4nKKQAAANQvAPzzlyoIAAAAwJ6vAHx9t/bq96PeeggFAQAAAJjqr0P/I6tfuqUgAAAAAGNdequpggAAAADk8vbPmigGAAAAQHxTftdUUQAAAAAaFABuKQYAAABAgwLALcUAAAAAaFAA+E5BAAAAABoUAL5TEKjre9/6qUcAAIDGBYCdBQEH0vX9J+YAAADrhC4AfOeGQK3+UQAAAABYJ1UB4Ds3BHL3gQIAAADAOqkLAF/cDMgZawUAAACAdUoUAO5RFIgfRwUAAACAdcoWAL7zdQFxAgAA6KxNAeCW2wH7YnHLDQAAAIB1WhYAvut4O2DnwT9aLLpbkQv6mt0UfgEAFADaFAQiHPi/cyhcK1oO6H+65PoXOQ81xvLXeP58PuMa8vv9v7Ecbc65faaRc41PYJ/YkQSjOjdaAt9j0ZwrQw5Uzols8c8a+2xxviXmsWXtnwqyjesKuZIl5hVinb0PKvXL72QxHxXnlJ21S9SCQLbkzT5ZRJY1FyrmSLa+yBLrbHGt1geV41+53zLJmmOZ8yBbzDPHukL8q/TL74RxHxXjXyP+I13cC/rs5Pn+3/96hoxJyxyVc+G2bdkWFsapnOO35Hud/DRfjYslVCbnxX0HBYA33S7yKwaxiYKueZDpcNSxf0brHsNM+c6/FAVgHu9eiMc6lYsCwMTk776BZQ555XBUmfx+HBMbrNwUdY7Hh3XEfR+xF/ddxS8FgIkUBBjFIvE6Ng5HecnvHLmun+bE0twlt+jHfCruOykAFP66ADXIlXNxspk+z4EyF7lei/6Ea+Mm63pfbV+XpR+qxf0dCgCbuB3AKyaqnJtp/SZGq3Mty+aL57r2pzmTTuQ7ESgABKEgwBeLwxhdN9ORye15cZXndXSauyrNCRnHYaX4ZyDeYh+FAkBQCgI9WRzmxTTbxmyVVXGR22viO6s/9d965i54PUayrO3mULGPRAEgCQWB+iwOa+KbZbNQhbzeE295XkemQ84Z5ga6qJzrFeemDn7ufgCuDziDro7Ki0OnWOvHv2MhHvuIfS3V+rNae+ARub5Xxfj/HtAmNwCSu1cEqJjsVemrvXFXRJsbX2p8cqw/YzBvMSOfsqt6Q4b3VcnxGdwAKHw7wC2B2ExM+3Xvg9GbJp/6x9M9xyvK3qfZnx+OkutEpQDQgGJAPBaFOEYdWrv3aff2R6YwU0/W8Zb1ueGsDrke+eZFh/i/QwGgGbcD9jMpxaRfxK46OV6L/oxHn4i7PNjPOHxNAaA5BYG1TEqx6Z/z8RKzXM72l/6NLVP/ZHrW6vSF2NKbAgB/URCYx4KbQ5d+evfqXpc4VaTvkHNgbq3I+naMAgBPeX8AvNZtwenWXogs+niM/nzUsDvPdv/9q0X8/n+nPvj9ZlsVADjM7YDrOk1K2UVc1CKRyzXox1r0J3LF+IOjfh3+N+HFQckG5D5xyaPL4f9qO+VyL/obOQRkYL06xw0Aht8QEFIykrvPWVxrke/1RBuj0Z5nla7t7hr7jv0dbf3o2AfvUgBgKINQPLrpkPMd2thJtM0b4xirsI7xtp8+uMZXABjCABSTzByIHjO2a5HrrGDeiEm/iCV8UgDAIkJr3Q5EZ9prs1iLvu/hc9zunNfMG1TPfzkeg364TgGAQwyyc8Qrh3c3CZX7uXLbOupW6AKYofvaGGUt6d4P71IAYMvAijKB0JccfMzCWotcZxVzR1yd+mbWLYBOMaR2nisA8FciCceYASmOsTkQPSZ/a7mS63Igvx1fA5A3VCa/49AX71MAaG7VIHLgIorOudi57R3pb+j5HgaoyuF/DAWAZlYOnI6Ln4mpj4p9XbFNXXWcf9nH3EHlIoz8/i/rSh0KAMXtmLRMEEQlNx+zwalDnrPyU2hzR3z6SOwqkMfjKAAUs3pw2GiSRfdcfdZ+i2odftmClcwdVCa/49AXYykAJOdKP7zW/fD/jEW1DnkOMOYWjLXR+lI5xxUAEnLoj8liEZOfAqIDh39Ws+ZRldyORX+MpwAQmO/vk+HwEHlidijK23ccJ89ZzdxxLEYRxqa+Eq/M5O8cCgAB+YSfVUZsTr7/N0zW8UTYhBK/b41doHMhxhxIFwoAAXhxH5XcLrQ7F1OH3udsdM7lTMR4yXF2fAodcSwA9dYac828ef7XvSDbVMzvJJ/ys9uKcb6rGDCzbRUWpAptWJ0bj/7crlhap9mh89xBbXI7Fv1x3LCXACoGzE3i2UltY7ieiep4Xsp/Vps5J+74CowXW4oBHGFv8icO2W54daY/5vv1KtCKAddU+bSTuna9oGhmIcBYeB2TLgvrrlyYXeiS4/W/vhSVmFCRvKb1VwCO/gXf/5nNiLf1Q4SD0oq5yEYhvihr0ozDZJS2dbDqxlIW4kBF8jreuqNPkrwE8FFHVd+oeHEflfJ453i10V6n8sIaec0ZkeOR27faylisfmcPtUT5KUD+7QvjOh59srgAMGOBqzjpudZPVdkLAdXmGmr2/dW1dnYbbbpex79zjDq3PTP9JjZw+R0A7/j+3820UVs9gWaMDfVkLAQYO31jk7F9brzk1LUI0LHN1CanY66x+iXZVwCqvUPAp/wQ4+WfRzbcFqe+i2u0tWNGISB7GwEiqbYOVqFfihcAon3i6Hv8cG6crB6nzw5JDkd9Ver7rp8sX1Wp76OTl3npOyB0AeDLig2+Az+MGUM7CgE2NOdj9vX/q8Su6uHvXn6vamuV3GAseQGsYK7Z8+69MAWAmZ88OvhD/lsBt4ekqgdBHqve51/5Xb2drCWfgKhzh8P/PqELAM8OHM82Sr7HDzWLAbs2s5kXqczP3u0Q06WdV4nPGhXmjEgU9oBo0hQA7i1OOxYpGxAe5YVNU4xfEQDgGutYfvqQDOTpXikLACs5yEDOXxHorFLMK7UlGhsw5ANg7elHAeAOG04YJ/utgMyHpMzPnjlnACCrmWtv9n1JFQoANpmwRPZCAGvJEyLlQ/VNa/X2AVT3+8SLhFsWAHZvJKAzXw9gZ851E+FlucTe62TMBe/dqdOX9JExPz+KvuOrTQHAoZ8VOVZxkpjJrYDxKsx1FdpAHeZ1gH7z6EfhvUjZAkDlToNqov5MUsYFq8KzM0bEMZVN9XGUsX0Z8zrqGgffydMeyhQAJCzk5jYAM+byjAccYqzv1XOnevu60Z9ElTE3P4oX7NIWAKp3DDn5GsD7FALey78BXUBxGTdjq2WPUdW5oGq7oKrsc2lVaQoAJn3oxZXJfszzYrlbl81qxnaaH8AYM9eM2TuHLgCY7MnILYAatwEybpArPDvcWjX2O42ZKm211kJsGeeaLmfPcAWALoEHjnMbgC6bD9apmh8V91EV2zRS1VwmLzkZ2/YCgEmdinwyMZ4iwOuc+5FY9ufPItumLNvzRpcxnlXmBmsY5JxrPgr+zPfyAkCViRxeqThh7GYDBa9ZZ/t61vfWI+DK3HFWxrnmo9n5dHoBoFtA4ZYiQM73AmRcvACqzWn2kJBL1rmmmykFABM2ADvXDJsQuqm296rWnlnMdfCej4ZzzdsFgI5BgzPcApjD1wH+zrHbuEwKOQm4As535gRgBXNNHj+vbjC+jH8kqMdYybPYWMCAKmtM1vnMmgm5xpu5Jo4jffHzaMc79MN7FM3myLroAIzgsAxg7hxyA+D2wG9xgXGMp/E6FwHk078658MjYtJP1j4/M6dlm/9G90nWPqaWjHn4kWzumPYOgO6BgJW8FwCYMa+Iai+u/pOFfU9NGQ//XHwHAPA+t2viLUIWMiCLagWfau2hn4w5/M4zZ90zfVxoc8a+fUYBADZTCADg7LpRbVPOOZn6+Stfqx2ibrnhQCYKABBE5YVxlUwbohHkzL+65cARYtJH1r42l5FZx/w11+TuHwUACMRtAABerRMiBDFkHo9Xn93hPz8FAAhIIeC6qwtT1gUNsm9C6X31v1vuZu2nUSr1921buvRrl3ZWpwAAgSkEAPC1HlTblFc6DK6Uqb+r9nHVdlWlvx78DCAQf+LKtOgzl8XsX13HR8WDIX8Y6xBL1zGZdT3p2l/PuAEACW8EmMwA6jsy13fflFsP88ncZ5mfvWI7uEYBAJJSCBi3Ic66gQbqcviHHGOywx4iaxsVOu5TAIAJk+SXFcF1KwB4NBeJTD6Ku1QZ188OX9kOZtmet2vOzfSRLAee9ZsCAEwcbKsnTRvHHrItQq+MGCddNyjVcqG7M/2ZNeflLNl0ztms80z3fnvFSwBh8iT5+c9XT0Idf5rmKvGp4TPn9SVZnV0jMud65mcfZce+AL50yT1zzWMKALBwEtox6SoG0MXo8WXzQMSclZd9Vev7DIXbV2M0+vO/o3LbulMAYMskUq36eHSS3F3193OC+VUbO1HGRsaNj5//yytSrsMMFXK8QhvgHgUAtmygo232V79xfnfb3QqoK8MnKtDVu3O/sQ1r7N6n7W6XuaY2BQCG6jZhXG3vzq8EfNf5VkDHNkcWoTgGo43KafMVFUUsWndfh6L1B+MpAPCWzpPEyDeXR1hsOhcCiEMRgCoizOvUkWltzpz7HX6Jo1ubOvv94IMVPwPIqSTa8Tv3EY1ue6RY+inBuDJvqjKJNB47Pn8FXkgJ+Vhj6UIBgIduD/q3h38hmyNaUUUhgF0ijYOobFT7MB5q0q+x5rMIzzBb51804G8KAIQ/iEYzOzbRYl91UYwWZ/6mfwBYwc9xWnO7UQBo7vun/Dbdr+O1sl9W/F3UU6Vos2MMGHdEyiP5SLY8uLr+7Fq3qqyXcIaXADaUaSGJZPdhxCLVW9f+j/SizAzM73XoS5jLumKu6coNgAZ8wj8mhhGeIcJzwA5y/w+b1hzkLMTVbR591F7zVH33+tgNgKIM6LqxXH0rIFr7R6jYpg5m3waQF2sd7ceO/dKxzfA5J6zI/XfXEOOT7BQACjAR9eUrAj0q+1fas2ojVaUQUCFWFdrQLZfv6dRWauVDtbW3uky5xVgKAEkZtOL8LCdGLcLyjMi+5+fZvM+Y3zbYuXzmmD5DfsTRcTzea3PG9Y9xFACSMFDFfES+HFn4quda9fbd8skp5NJpfoLV61bHwz/cowAQnM2AuMsnoJqzG/HMxayjtwCyto95MuVE9MO1m5E584o5FAACMSBj0A9EEn1TRYxcMG8BVYwu+FlH/7BW8MnPAAb6ib7dz4KJsQILvXhQU+WxbQ8Ac1SeN47o3n7urzFuACxkgY9N/9Snj2G/jhvSZ18DMC/BHB3nmmfMNXxxA2Ayn/DDOhZ7cYFMbMh5lAOZcmPG2vvuf3PGM2Xqk0rPznhuAAxmgOWk34hIQYMjOs1fHV4GCLzHOPt37pFT3FIAeJNBlZ8+BKKzoa3H2gPjC37mSrHgNQWAEyzW9ejTOl4t+t37OvMnp91V2tBWass7twCMRcg1v2Qds1mfm7m8A+Dg9/cNoHr0Kd10P3xlZa76mzymukxjPsp4jPIckWTKI9ZSALjDgb8+k2ItFRf+im1ifC6Yy/LRZzB2LbRewrm1p/1XACzEUJ9x/ofrx1Qgj4GvuUAk4JyWNwBc6+/NYbAWi7+YkYOxCq/3JZn2KF3GdKY+gSNaFAB8l5+OC1YHVftyRbuqxq4Tm1Kgg0frlXUMrin5FQCbIl5xfRTIwAb3eWys99CTuRGa3wDwCT9XWDx69J8DwvsxhHfJNWDUHGI+gaY3AGzqGeFrEZFPuVj8x8ZS/pOV/F0T4x9JZJ/LMj3/jrzY8Xdm6pPszDVr8vkzzikKAAYfs9lE5pFpgci0qTLPxuPn/9gt23xrLoOcss012YX9CoA39bOayYfO5D8AYP9RX6gCgEM/EQ5BDkJxne0bn2rPjS9EyCt5K64VWK/i0SdUXXe2fQXAoOLdHJk5+FwjjCf7ZJuF3AfMt7xaJ0SIUXsOkSxcAHDgZ3SufL3IYlZkvSAwhk6LQ5S2KgLs5/v/5+NlnwEAm78C4Eo/V3LmSo51OJR1JPZiD5h3gXrs8YrcAFB9p2r+uA2wL+YV8ykLeb837hVUaksH+gv+yx7CXFM5t3+O+oTfQOHdXNr554/yksA1Om5CI7c58rNVcmR+sdY+j9/4XiEbeSC+wMAbADYezJAxr3wyOjeuxCPn58cWdpKHgLmmh5c3AHzCT5ZNx45CghsBY2PZuaiUhUPC2FiKJxHIQ8Bc0/wGgM0zO2V8m7NPR9+PHXnI9zHxq25HOzOuH5BFl7nLHEL19eb/CwBZGwCROBhdi1d3WeMg36/F6yrrNDNknX+AXMw1RX8FAEaosMl1MDoWH2qQ769jwzqZP5VZTX4C5pqmBQALJczfXHUfZ6s2mt3jvJNCwL+x6Kp7+wEgKjcAYJGuxQAHgX66FgJm5nq3WDKfuRn58i9zrbmmAwUAylzrzLSZqV4MyNQXu1WOVfU8r95/mfkaQG/6H2KwRsakAEAIlQ73Z31vW9aDUuU+4n1VigHyPA+HwOexWdgVkIZ5Y2wsfxT3kfSdMy2vaVLv4Ft9kok4RqvHnLXkOADAfAoAhDpAXjkEdD6Irjg0dY4vPYoCchwA6EIBgH3J9+RgeXTjb+MOAABwzM+D/x5Md3vod7AHAAD4MdT/AWkMzmIpHnkYAAAAAElFTkSuQmCC" alt="SIGRAMA" />
+      </div>
+      <div class="title-box">
+        <h1>
+          <span>⚡ SIGRAMA</span>
+          <span style="font-weight: 400; color: #94a3b8;">|</span>
+          <span style="color: #38bdf8;">Control Dimensional de Calidad 3D con Visión e IA</span>
+        </h1>
+        <p>Arquitectura Ciberfísica 4.0: Flujo de Datos, Redes y Conexiones en Tiempo Real</p>
+        <div class="badge-bar">
+          <span class="tech-pill status"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span> Sistema En Vivo</span>
+          <span class="tech-pill gcp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28">
+  <path fill="#4285F4" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+  <path fill="#EA4335" d="M19.35 10.04C18.67 6.59 15.64 4 12 4c-1.48 0-2.85.45-3.98 1.22l2.16 2.16C10.74 7.15 11.35 7 12 7c2.76 0 5 2.24 5 5 0 .25-.03.49-.07.72l2.42 2.42c.62-.97 1-2.12 1-3.35 0-2.64-2.05-4.78-4.65-4.96z"/>
+  <path fill="#FBBC05" d="M5.35 8.04C2.34 8.36 0 10.91 0 14c0 2.21 1.2 4.14 2.97 5.17l2.25-2.25C4.46 16.32 4 15.22 4 14c0-2.21 1.79-4 4-4 .38 0 .74.06 1.09.16l2.16-2.16C10.07 7.37 8.78 7.05 7.42 7.13L5.35 8.04z"/>
+  <path fill="#34A853" d="M19 19H6c-.57 0-1.11-.12-1.61-.33l-2.25 2.25C3.37 21.57 4.62 22 6 22h13c3.87 0 7-3.13 7-7 0-1.89-.75-3.6-1.97-4.87l-2.03 2.03C22.61 12.82 23 13.86 23 15c0 2.21-1.79 4-4 4z"/>
+</svg> Google Cloud Run & GCS</span>
+          <span class="tech-pill github"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="#f8fafc">
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+</svg> GitHub CI/CD Automático</span>
+          <span class="tech-pill streamlit"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <path fill="#FF4B4B" d="M12 2L1 21h22L12 2zm0 4.2L19.5 19h-15L12 6.2z"/>
+</svg> Streamlit Reactive WebSockets</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLES -->
+    <div class="controls">
+      <button class="btn-ctrl" id="btn-toggle-play">⏸️ Pausar Flujo</button>
+      <button class="btn-ctrl" id="btn-speed">Velocidad: 1x</button>
+      <button class="btn-ctrl active" id="btn-filter-all">Todos los Flujos</button>
+    </div>
+  </header>
+
+  <!-- VIEWPORT DE ARQUITECTURA -->
+  <div class="viewport" id="viewport">
+
+    <!-- CANVAS SVG DE CABLES Y FLUJOS -->
+    <svg class="network-canvas" id="svg-canvas">
+      <!-- 1. Cliente UI hacia GFE (HTTPS :443) -->
+      <path id="path-client-gfe" class="wire blue" d="M 360 170 L 390 170 L 390 230 L 410 230" />
+      
+      <!-- 2. GFE hacia Cloud Run (:8080 interno) -->
+      <path id="path-gfe-cr" class="wire green" d="M 640 230 L 690 230 L 690 180 L 720 180" />
+      
+      <!-- 3. Cloud Run hacia SQLite WAL -->
+      <path id="path-cr-sqlite" class="wire green" d="M 980 200 L 980 240" />
+      
+      <!-- 4. SQLite hacia GCS Backup -->
+      <path id="path-sqlite-gcs" class="wire orange" d="M 980 320 L 980 430" />
+      
+      <!-- 5. Sincronizador de Planta hacia GCS Bucket -->
+      <path id="path-sync-gcs" class="wire orange" d="M 360 520 L 525 520 L 525 470 L 720 470" />
+
+      <!-- 6. GCS Bucket hacia Signed URL Proxy -->
+      <path id="path-gcs-signed" class="wire magenta" d="M 720 530 L 525 530 L 525 580 L 410 580" />
+      
+      <!-- 7. Signed URL hacia Visor 3D Cliente -->
+      <path id="path-signed-client" class="wire magenta" d="M 410 610 L 390 610 L 390 730 L 360 730" />
+
+      <!-- 8. GitHub CI/CD hacia Cloud Run -->
+      <path id="path-cicd-cr" class="wire purple" d="M 980 690 L 980 620 L 1150 620 L 1150 200 L 1080 200" />
+    </svg>
+
+    <!-- PAQUETES DE DATOS FLOTANTES CON MOVIMIENTO -->
+    <div id="packet-1" class="packet-bubble bubble-blue">⚡ Streamlit UI State (:443)</div>
+    <div id="packet-2" class="packet-bubble bubble-green">⚙️ HTTP Proxy (:8080)</div>
+    <div id="packet-3" class="packet-bubble bubble-orange">💾 SQLite WAL ⇄ GCS Sync</div>
+    <div id="packet-4" class="packet-bubble bubble-orange">📁 Planos SHA-256 Upload</div>
+    <div id="packet-5" class="packet-bubble bubble-magenta">🧊 STEP 3D Directo (Signed URL)</div>
+    <div id="packet-6" class="packet-bubble bubble-magenta">📐 Mesh WebGL al Navegador</div>
+    <div id="packet-7" class="packet-bubble bubble-purple">🔄 Push 'main' Deploy Zero-Downtime</div>
+
+    <!-- ZONA 1: PLANTA INDUSTRIAL SIGRAMA -->
+    <div class="zone" id="zone-planta">
+      <div class="zone-header">
+        <div class="zone-title">🏭 Planta SIGRAMA</div>
+        <span class="zone-tag">LAN On-Premises</span>
+      </div>
+
+      <div class="node-card" onclick="showInfo('inspector')">
+        <h3>👷 Inspector de Calidad <span class="badge badge-lan">Tablet / PC</span></h3>
+        <p>Captura de cotas de vernier/micrómetro y dictamen pasa/no-pasa en línea de producción.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #38bdf8;">Puerto 443 ➔ WSS</span>
+          <span class="badge badge-https">UI Web</span>
+        </div>
+      </div>
+
+      <div class="node-card" onclick="showInfo('engineer')">
+        <h3>📐 Ingeniero de Diseño <span class="badge badge-lan">CAD Workstation</span></h3>
+        <p>Exportación de archivos STEP, DXF CNC y gestión de tolerancias de doblado y punzonado.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #38bdf8;">SolidWorks / Inventor</span>
+          <span class="badge badge-lan">LAN 1 Gbps</span>
+        </div>
+      </div>
+
+      <div class="node-card" onclick="showInfo('nas')">
+        <h3>📁 Repositorio SMB / NAS <span class="badge badge-lan">Z:\ Planos</span></h3>
+        <p>Servidor local de ingeniería con base de datos de productos y planos históricos del cliente.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #ca8a04;">Puerto 445 SMB</span>
+          <span class="badge badge-lan">On-Premises</span>
+        </div>
+      </div>
+
+      <div class="node-card" onclick="showInfo('sync')">
+        <h3>⚡ Sincronizador Local <span class="badge badge-gcs">Python + GUI</span></h3>
+        <p>Escaneo incremental con hash SHA-256 para transferir planos de planta a Cloud Storage sin duplicar.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #ea580c;">GCS API :443</span>
+          <span class="badge badge-gcs">Multi-Hilo</span>
+        </div>
+      </div>
+
+      <div class="node-card" onclick="showInfo('edgeai')">
+        <h3>🖐️ Edge AI: Gestos 3D <span class="badge badge-ai">MediaPipe</span></h3>
+        <p>Tracking de 21 articulaciones en WebAssembly y Three.js. Procesa 60 FPS en el cliente con 0 latencia de red.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #10b981;">16ms WebAssembly</span>
+          <span class="badge badge-ai">Sin Uso de Red</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ZONA 2: PERÍMETRO DE RED Y SEGURIDAD -->
+    <div class="zone" id="zone-perimeter">
+      <div class="zone-header">
+        <div class="zone-title">🌐 Perímetro Seguro</div>
+        <span class="zone-tag">TLS 1.3 / WAF</span>
+      </div>
+
+      <div class="node-card" style="margin-top: 40px;" onclick="showInfo('gfe')">
+        <h3>🛡️ Google Front End (GFE) <span class="badge badge-https">:443</span></h3>
+        <p>Punto de entrada global de Google con terminación SSL/TLS 1.3, mitigación de ataques DDoS y túneles WebSockets.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #38bdf8;">Cloud Load Balancing</span>
+          <span class="badge badge-https">Cifrado E2E</span>
+        </div>
+      </div>
+
+      <div class="node-card" style="margin-top: 140px;" onclick="showInfo('signed')">
+        <h3>🔑 Canal Signed URLs <span class="badge badge-gcs">HMAC-SHA256</span></h3>
+        <p>Tokens de descarga directa de 15 min. El navegador descarga modelos CAD pesados de GCS sin pasar por Cloud Run.</p>
+        <div class="card-footer">
+          <span style="font-size: 0.7rem; color: #ec4899;">Descarga Directa :443</span>
+          <span class="badge badge-gcs">Ahorro RAM</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ZONA 3: GOOGLE CLOUD PLATFORM -->
+    <div class="zone" id="zone-gcp">
+      <div class="zone-header">
+        <div class="zone-title" style="display: flex; align-items: center; gap: 8px;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28">
+  <path fill="#4285F4" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+  <path fill="#EA4335" d="M19.35 10.04C18.67 6.59 15.64 4 12 4c-1.48 0-2.85.45-3.98 1.22l2.16 2.16C10.74 7.15 11.35 7 12 7c2.76 0 5 2.24 5 5 0 .25-.03.49-.07.72l2.42 2.42c.62-.97 1-2.12 1-3.35 0-2.64-2.05-4.78-4.65-4.96z"/>
+  <path fill="#FBBC05" d="M5.35 8.04C2.34 8.36 0 10.91 0 14c0 2.21 1.2 4.14 2.97 5.17l2.25-2.25C4.46 16.32 4 15.22 4 14c0-2.21 1.79-4 4-4 .38 0 .74.06 1.09.16l2.16-2.16C10.07 7.37 8.78 7.05 7.42 7.13L5.35 8.04z"/>
+  <path fill="#34A853" d="M19 19H6c-.57 0-1.11-.12-1.61-.33l-2.25 2.25C3.37 21.57 4.62 22 6 22h13c3.87 0 7-3.13 7-7 0-1.89-.75-3.6-1.97-4.87l-2.03 2.03C22.61 12.82 23 13.86 23 15c0 2.21-1.79 4-4 4z"/>
+</svg> Google Cloud Platform (us-central1)
+        </div>
+        <span class="zone-tag" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5;">Serverless & Alta Disponibilidad</span>
+      </div>
+
+      <!-- Cloud Run -->
+      <div class="gcp-box cloudrun">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3 style="font-size: 0.9rem; color: #fca5a5; display: flex; align-items: center; gap: 8px;">
+            🚀 Cloud Run: 'control-dimensional-calidad' <span class="badge badge-gcp">Puerto Interno :8080</span>
+          </h3>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Contenedor Docker Linux</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="node-card" onclick="showInfo('streamlit')">
+            <h3>⚡ Servidor Streamlit <span class="badge badge-streamlit">Python 3.11</span></h3>
+            <p>Ejecución reactiva del Hub Central, Visor 3D, Módulo de Auditoría y Remisiones.</p>
+          </div>
+          <div class="node-card" onclick="showInfo('sqlite')">
+            <h3>🗄️ SQLite WAL In-Container <span class="badge badge-gcp">ACID Local</span></h3>
+            <p>Transacciones con PRAGMA WAL y concurrencia multi-usuario sin costo de Cloud SQL.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cloud Storage -->
+      <div class="gcp-box gcs">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3 style="font-size: 0.9rem; color: #fde68a; display: flex; align-items: center; gap: 8px;">
+            🪣 Cloud Storage: gs://sigrama-planos-calidad-2026 <span class="badge badge-gcs">SLA 99.95%</span>
+          </h3>
+          <span style="font-size: 0.75rem; color: #94a3b8;">Cifrado AES-256 en Reposo</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+          <div class="node-card" onclick="showInfo('gcs-models')">
+            <h3>🧊 Modelos STEP / DXF</h3>
+            <p>Carpetas Auditadas/ y Sin_Auditar/ para visualización y control dimensional.</p>
+          </div>
+          <div class="node-card" onclick="showInfo('gcs-db')">
+            <h3>💾 Backup DB SQLite</h3>
+            <p>Ruta system/sigrama_calidad.db restaurada automáticamente al arrancar.</p>
+          </div>
+          <div class="node-card" onclick="showInfo('gcs-pdf')">
+            <h3>📄 Planos PDF y Tolerancias</h3>
+            <p>Planos de control y matrices de tolerancia generadas para el taller.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- GitHub CI/CD -->
+      <div class="gcp-box cicd">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 0.9rem; color: #d8b4fe; display: flex; align-items: center; gap: 8px;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="26" height="26" fill="#f8fafc">
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+</svg> Canal CI/CD Continuo: GitHub ➔ Cloud Build ➔ Artifact Registry
+          </h3>
+          <span class="badge badge-github">Zero Downtime Revisions</span>
+        </div>
+        <p style="font-size: 0.75rem; color: #cbd5e1; margin-top: 6px;">
+          Cada confirmación (push) a la rama <strong>main</strong> dispara automáticamente la construcción de imagen Docker y despliegue continuo sin desconectar a los inspectores de planta.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- MODAL / TOOLTIP EXPLICATIVO INTERACTIVO -->
+    <div id="info-modal">
+      <button class="modal-close" onclick="closeInfo()">&times;</button>
+      <h4 id="modal-title">Componente</h4>
+      <p id="modal-desc">Descripción detallada</p>
+    </div>
+
+  </div>
+
+  <!-- PIE DE PÁGINA CON LEYENDA TÉCNICA -->
+  <footer>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot" style="background: #38bdf8; color: #38bdf8;"></span> 1. Tráfico UI / WebSockets (:443)</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #10b981; color: #10b981;"></span> 2. Proxy Interno Cloud Run (:8080)</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #f97316; color: #f97316;"></span> 3. Sincronización Planos y SQLite WAL</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #ec4899; color: #ec4899;"></span> 4. Streaming Directo CAD (Signed URLs)</div>
+      <div class="legend-item"><span class="legend-dot" style="background: #a855f7; color: #a855f7;"></span> 5. CI/CD GitHub Automático</div>
+    </div>
+    <div style="font-size: 0.75rem; color: #64748b;">
+      SIGRAMA Automatización y Control Dimensional © 2026
+    </div>
+  </footer>
+
+  <!-- SCRIPT DE ANIMACIÓN DINÁMICA DE PAQUETES -->
+  <script>
+    let isPlaying = true;
+    let speed = 1.0;
+
+    const packets = [
+      { id: 'packet-1', pathId: 'path-client-gfe', progress: 0.1, speed: 0.0035 },
+      { id: 'packet-2', pathId: 'path-gfe-cr', progress: 0.35, speed: 0.004 },
+      { id: 'packet-3', pathId: 'path-sqlite-gcs', progress: 0.6, speed: 0.003 },
+      { id: 'packet-4', pathId: 'path-sync-gcs', progress: 0.2, speed: 0.0028 },
+      { id: 'packet-5', pathId: 'path-gcs-signed', progress: 0.8, speed: 0.0035 },
+      { id: 'packet-6', pathId: 'path-signed-client', progress: 0.45, speed: 0.0038 },
+      { id: 'packet-7', pathId: 'path-cicd-cr', progress: 0.05, speed: 0.0025 }
+    ];
+
+    function animate() {
+      if (isPlaying) {
+        packets.forEach(p => {
+          const path = document.getElementById(p.pathId);
+          if (path) {
+            const totalLen = path.getTotalLength();
+            p.progress = (p.progress + p.speed * speed) % 1.0;
+            const pt = path.getPointAtLength(p.progress * totalLen);
+            const el = document.getElementById(p.id);
+            if (el) {
+              el.style.left = pt.x + 'px';
+              el.style.top = pt.y + 'px';
+            }
+          }
+        });
+      }
+      requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+
+    // Controles
+    const btnPlay = document.getElementById('btn-toggle-play');
+    btnPlay.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      btnPlay.innerHTML = isPlaying ? '⏸️ Pausar Flujo' : '▶️ Reanudar';
+      btnPlay.classList.toggle('active', !isPlaying);
+    });
+
+    const speeds = [0.5, 1.0, 1.75, 3.0];
+    let speedIdx = 1;
+    const btnSpeed = document.getElementById('btn-speed');
+    btnSpeed.addEventListener('click', () => {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      speed = speeds[speedIdx];
+      btnSpeed.textContent = `Velocidad: ${speed}x`;
+    });
+
+    // Modales Explicativos
+    const infoData = {
+      inspector: {
+        title: '👷 Inspector de Calidad en Piso de Planta',
+        desc: 'Opera en tablets industriales o PCs con vernier y micrómetro. Se comunica con Cloud Run mediante túnel seguro HTTPS/WSS (puerto 443) para registrar cotas y tolerancias en tiempo real sin requerir instalación de software complejo.'
+      },
+      engineer: {
+        title: '📐 Ingeniero de Diseño (SolidWorks / CAD)',
+        desc: 'Diseña piezas en SolidWorks e Inventor. Exporta ensambles STEP y DXF a la carpeta de ingeniería compartida en red local (SMB). Usa el sincronizador para subir versiones autorizadas a la nube.'
+      },
+      nas: {
+        title: '📁 Repositorio SMB / NAS Local (Puerto 445)',
+        desc: 'Unidad de red de ingeniería (Z:\ 02 - INGENIERIA\BASE DE DATOS PRODUCTOS). Almacena los archivos maestros en planta. No se expone directamente a Internet por razones estrictas de ciberseguridad.'
+      },
+      sync: {
+        title: '⚡ Sincronizador de Prototipos SIGRAMA',
+        desc: 'Herramienta de escritorio Python 3.12 con interfaz gráfica amigable y lanzador .bat. Realiza escaneos comparativos con sumas de verificación SHA-256 para transferir únicamente archivos nuevos o modificados a Cloud Storage.'
+      },
+      edgeai: {
+        title: '🖐️ Edge AI: Control Gestual y 3D en Navegador',
+        desc: 'Utiliza Google MediaPipe Hands para detectar 21 puntos anatómicos de la mano a 60 FPS en el navegador del operador. Al procesarse en el cliente (Edge / WebGL / WebAssembly), no consume ancho de banda de la fábrica ni satura el servidor en la nube.'
+      },
+      gfe: {
+        title: '🛡️ Google Front End (GFE) & Cloud Load Balancing',
+        desc: 'Infraestructura de borde de Google con IP Anycast. Gestiona el puerto 443, descifra el tráfico TLS 1.3 con certificados gestionados y protege contra ataques de denegación de servicio (DDoS) antes de enrutar a Cloud Run.'
+      },
+      signed: {
+        title: '🔑 Descarga Directa con Signed URLs (HMAC-SHA256)',
+        desc: 'Cloud Run genera URLs firmadas temporales (15 minutos). El navegador descarga modelos STEP pesados (20 a 100 MB) directamente de Cloud Storage, evitando que el contenedor en Cloud Run sufra cuellos de botella de memoria RAM.'
+      },
+      streamlit: {
+        title: '⚡ Servidor Streamlit Reactivo (Puerto 8080)',
+        desc: 'Servicio en Google Cloud Run que ejecuta la aplicación web completa (Hub 4.0, Visor 3D, Auditoría y Módulo de Remisión). Procesa peticiones HTTP y flujos bidireccionales WebSocket /_stcore/stream.'
+      },
+      sqlite: {
+        title: '🗄️ Motor SQLite WAL In-Container',
+        desc: 'Base de datos embebida con registro Write-Ahead Logging (WAL) y temporizador busy_timeout de 60 segundos. Brinda máxima velocidad transaccional a costo cero de servidores SQL dedicados, respaldándose continuamente a GCS.'
+      },
+      'gcs-models': {
+        title: '🧊 Almacenamiento de Modelos CAD (GCS Bucket)',
+        desc: 'Depósito seguro en la nube con réplica multirregional y cifrado en reposo AES-256. Alberga archivos STEP, DXF, SLDPRT y ensambles organizados en carpetas Auditadas y Sin_Auditar.'
+      },
+      'gcs-db': {
+        title: '💾 Respaldo y Restauración de Base de Datos',
+        desc: 'Ruta protegida gs://.../system/sigrama_calidad.db. Cuando Cloud Run escala a cero o inicia una nueva instancia, descarga la base de datos más reciente para mantener continuidad absoluta de la información.'
+      },
+      'gcs-pdf': {
+        title: '📄 Planos PDF y Especificaciones de Calidad',
+        desc: 'Repositorio centralizado de hojas de trabajo, remisiones firmadas y planos de control dimensional para consulta inmediata de supervisores e inspectores.'
+      }
+    };
+
+    function showInfo(key) {
+      const d = infoData[key];
+      if (d) {
+        document.getElementById('modal-title').textContent = d.title;
+        document.getElementById('modal-desc').textContent = d.desc;
+        document.getElementById('info-modal').style.display = 'block';
+      }
+    }
+
+    function closeInfo() {
+      document.getElementById('info-modal').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
