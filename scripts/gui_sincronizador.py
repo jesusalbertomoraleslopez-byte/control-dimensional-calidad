@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 INDUSTRIA SIGRAMA S.A. DE C.V.
-Aplicación Gráfica de Sincronización Automática de Prototipos a Google Cloud
+Aplicación Gráfica de Sincronización Incremental de Prototipos a Google Cloud
 Control Dimensional y Calidad Industrial 4.0
+
+Diseñada para transferir ÚNICAMENTE los archivos faltantes o modificados de la unidad Z:\,
+omitiendo automáticamente los archivos que ya existen en la nube para garantizar cero
+costos innecesarios de red y almacenamiento en Google Cloud Platform.
 """
 
 import os
@@ -31,9 +35,9 @@ CLOUD_RUN_URL = "https://sigrama-calidad-prototipos-500497385665.us-central1.run
 class SigramaSyncApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("SIGRAMA METALES — Sincronizador de Prototipos a Google Cloud")
-        self.root.geometry("740x620")
-        self.root.minsize(700, 560)
+        self.root.title("SIGRAMA METALES — Sincronizador Incremental a Google Cloud")
+        self.root.geometry("780x640")
+        self.root.minsize(720, 580)
         self.root.configure(bg="#0F172A")
 
         self.is_running = False
@@ -64,8 +68,8 @@ class SigramaSyncApp:
 
         lbl_subtitle = tk.Label(
             title_container,
-            text="Sincronizador Automático de Carpetas de Prototipos a Google Cloud Storage",
-            font=("Segoe UI", 10),
+            text="Sincronizador Incremental Inteligente — Sube ÚNICAMENTE Información Faltante",
+            font=("Segoe UI", 9),
             fg="#94A3B8",
             bg="#1E293B"
         )
@@ -74,7 +78,7 @@ class SigramaSyncApp:
         # ── TARJETA DE ESTADO Y RUTAS ──
         info_card = tk.LabelFrame(
             self.root,
-            text="  Estado de Almacenamiento y Conexión  ",
+            text="  Estado de Almacenamiento, Red y Ahorro de Costos  ",
             font=("Segoe UI", 9, "bold"),
             fg="#F8FAFC",
             bg="#1E293B",
@@ -82,7 +86,7 @@ class SigramaSyncApp:
             pady=10,
             relief="groove"
         )
-        info_card.pack(fill="x", padx=18, pady=12)
+        info_card.pack(fill="x", padx=18, pady=10)
 
         # Fila 1: Ruta Red
         row1 = tk.Frame(info_card, bg="#1E293B")
@@ -91,17 +95,17 @@ class SigramaSyncApp:
         self.lbl_network_path = tk.Label(row1, text=NETWORK_PATH, font=("Consolas", 9), fg="#38BDF8", bg="#1E293B")
         self.lbl_network_path.pack(side="left")
 
-        # Fila 2: Bucket
+        # Fila 2: Bucket y Política
         row2 = tk.Frame(info_card, bg="#1E293B")
         row2.pack(fill="x", pady=2)
         tk.Label(row2, text="☁️ Bucket Destino:", font=("Segoe UI", 9, "bold"), fg="#94A3B8", bg="#1E293B", width=18, anchor="w").pack(side="left")
-        tk.Label(row2, text="gs://sigrama-planos-calidad-2026/Sin_Auditar/", font=("Consolas", 9), fg="#34D399", bg="#1E293B").pack(side="left")
+        tk.Label(row2, text="gs://sigrama-planos-calidad-2026/ | Política: Incremental (Omite duplicados)", font=("Consolas", 9), fg="#34D399", bg="#1E293B").pack(side="left")
 
         # Fila 3: Conteo en vivo
         row3 = tk.Frame(info_card, bg="#1E293B")
-        row3.pack(fill="x", pady=4)
+        row3.pack(fill="x", pady=3)
         tk.Label(row3, text="📊 Detección:", font=("Segoe UI", 9, "bold"), fg="#94A3B8", bg="#1E293B", width=18, anchor="w").pack(side="left")
-        self.lbl_counter = tk.Label(row3, text="Consultando carpetas...", font=("Segoe UI", 9, "bold"), fg="#FCD34D", bg="#1E293B")
+        self.lbl_counter = tk.Label(row3, text="Consultando inventario en red y nube...", font=("Segoe UI", 9, "bold"), fg="#FCD34D", bg="#1E293B")
         self.lbl_counter.pack(side="left")
 
         btn_refresh = tk.Button(
@@ -117,21 +121,32 @@ class SigramaSyncApp:
         )
         btn_refresh.pack(side="right")
 
+        # Fila 4: Garantía de no duplicados
+        row4 = tk.Frame(info_card, bg="#1E293B")
+        row4.pack(fill="x", pady=2)
+        tk.Label(
+            row4,
+            text="🛡️ Protección de Costo: Si un archivo ya existe en Google Cloud con el mismo tamaño, se omite automáticamente.",
+            font=("Segoe UI", 8, "italic"),
+            fg="#FDE047",
+            bg="#1E293B"
+        ).pack(anchor="w")
+
         # ── BOTONES DE ACCIÓN PRINCIPALES ──
         actions_frame = tk.Frame(self.root, bg="#0F172A", padx=18, pady=4)
         actions_frame.pack(fill="x")
 
         self.btn_sync = tk.Button(
             actions_frame,
-            text="⚡ SUBIR PROTOTIPOS A GOOGLE CLOUD",
-            font=("Montserrat", 11, "bold"),
+            text="⚡ SUBIR ÚNICAMENTE ARCHIVOS FALTANTES A GOOGLE CLOUD",
+            font=("Montserrat", 10, "bold"),
             bg="#EC2024",
             fg="#FFFFFF",
             activebackground="#C62828",
             activeforeground="#FFFFFF",
             relief="flat",
             padx=20,
-            pady=12,
+            pady=11,
             cursor="hand2",
             command=self._start_sync_thread
         )
@@ -147,14 +162,14 @@ class SigramaSyncApp:
             activeforeground="#FFFFFF",
             relief="flat",
             padx=16,
-            pady=12,
+            pady=11,
             cursor="hand2",
             command=lambda: webbrowser.open(CLOUD_RUN_URL)
         )
         btn_open_web.pack(side="right")
 
         # ── BARRA DE PROGRESO ──
-        prog_frame = tk.Frame(self.root, bg="#0F172A", padx=18, pady=6)
+        prog_frame = tk.Frame(self.root, bg="#0F172A", padx=18, pady=4)
         prog_frame.pack(fill="x")
 
         self.lbl_progress_status = tk.Label(
@@ -164,7 +179,7 @@ class SigramaSyncApp:
             fg="#94A3B8",
             bg="#0F172A"
         )
-        self.lbl_progress_status.pack(anchor="w", pady=(0, 4))
+        self.lbl_progress_status.pack(anchor="w", pady=(0, 3))
 
         self.progress_bar = ttk.Progressbar(prog_frame, orient="horizontal", mode="determinate")
         self.progress_bar.pack(fill="x")
@@ -172,7 +187,7 @@ class SigramaSyncApp:
         # ── TERMINAL DE EVENTOS / LOG ──
         log_frame = tk.LabelFrame(
             self.root,
-            text="  Consola de Actividad y Transferencia  ",
+            text="  Registro de Transferencia e Inspección Incremental  ",
             font=("Segoe UI", 9, "bold"),
             fg="#94A3B8",
             bg="#0B132B",
@@ -180,7 +195,7 @@ class SigramaSyncApp:
             pady=6,
             relief="groove"
         )
-        log_frame.pack(fill="both", expand=True, padx=18, pady=(4, 16))
+        log_frame.pack(fill="both", expand=True, padx=18, pady=(4, 14))
 
         self.txt_log = scrolledtext.ScrolledText(
             log_frame,
@@ -196,6 +211,11 @@ class SigramaSyncApp:
     def _log(self, msg, color=None):
         self.txt_log.insert(tk.END, msg + "\n")
         self.txt_log.see(tk.END)
+        self.root.update_idletasks()
+
+    def _update_progress(self, val):
+        self.progress_bar["value"] = val
+        self.lbl_progress_status.config(text=f"Transfiriendo archivos faltantes: {val}% completado...")
         self.root.update_idletasks()
 
     def _refresh_status(self):
@@ -218,10 +238,10 @@ class SigramaSyncApp:
 
                 new_count = sum(1 for d in all_dirs if d.split("-")[0].strip() not in existing_ings)
 
-                status_txt = f"{len(all_dirs)} carpetas en Z:\\ | {total_db} piezas en Nube | {new_count} carpetas NUEVAS"
+                status_txt = f"{len(all_dirs)} carpetas en Z:\\ | {total_db} piezas en Nube | {new_count} carpetas NUEVAS por registrar"
                 color = "#34D399" if new_count == 0 else "#F59E0B"
                 self.lbl_counter.config(text=status_txt, fg=color)
-                self._log(f"[INFO] Estado actualizado: {len(all_dirs)} en red Z:\\, {new_count} pendientes de subir.")
+                self._log(f"[INFO] Estado: {len(all_dirs)} carpetas en Z:\\, {total_db} piezas en catálogo de la Nube.")
             except Exception as e:
                 self.lbl_counter.config(text=f"Carpetas en red: {len(all_dirs)} (Error DB: {e})", fg="#FCD34D")
 
@@ -232,13 +252,13 @@ class SigramaSyncApp:
             return
 
         if not os.path.exists(NETWORK_PATH):
-            messagebox.showerror("Error de Red", f"No se pudo acceder a la ruta:\n{NETWORK_PATH}\n\nVerifique la conexión al servidor NAS.")
+            messagebox.showerror("Error de Red", f"No se pudo acceder a la ruta:\n{NETWORK_PATH}\n\nVerifique la conexión al servidor NAS de ingeniería.")
             return
 
         self.is_running = True
-        self.btn_sync.config(state="disabled", bg="#64748B", text="⏳ SINCRONIZANDO CON LA NUBE...")
-        self.progress_bar["value"] = 0
-        self.lbl_progress_status.config(text="Iniciando transferencia a Google Cloud Storage...", fg="#38BDF8")
+        self.btn_sync.config(state="disabled", bg="#64748B", text="⏳ ANALIZANDO Y SINCRONIZANDO...")
+        self.progress_bar["value"] = 5
+        self.lbl_progress_status.config(text="Comparando inventario de red Z:\\ con Google Cloud Storage...", fg="#38BDF8")
 
         thread = threading.Thread(target=self._run_sync, daemon=True)
         thread.start()
@@ -246,45 +266,64 @@ class SigramaSyncApp:
     def _run_sync(self):
         try:
             self._log("=" * 65)
-            self._log(f"🚀 INICIANDO SINCRONIZACIÓN DE PROTOTIPOS: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            self._log(f"🚀 INICIANDO SINCRONIZACIÓN INCREMENTAL: {time.strftime('%Y-%m-%d %H:%M:%S')}")
             self._log(f"Origen: {NETWORK_PATH}")
-            self._log("Destino: gs://sigrama-planos-calidad-2026/Sin_Auditar/")
+            self._log("Destino: gs://sigrama-planos-calidad-2026/")
+            self._log("Política: Smart Incremental (Solo sube archivos faltantes)")
             self._log("=" * 65)
 
             from scripts.inyectar_red_a_bucket import inyectar_carpetas_red
             from scripts.subir_db_a_gcs import DB_PATH, GCS_DB_BLOB
             from src.services.gcs_storage import get_bucket, DEFAULT_BUCKET_NAME
 
-            self.lbl_progress_status.config(text="Transfiriendo archivos de prototipos hacia el Bucket...", fg="#38BDF8")
-            self.progress_bar["value"] = 25
+            # 1. Inyectar carpetas de forma incremental
+            res = inyectar_carpetas_red(logger=self._log, progress_cb=self._update_progress)
 
-            # 1. Inyectar carpetas
-            inyectar_carpetas_red()
+            if isinstance(res, dict) and "error" in res:
+                raise Exception(res["error"])
 
-            self.progress_bar["value"] = 80
-            self.lbl_progress_status.config(text="Persistiendo base de datos actualizada en Google Cloud...", fg="#34D399")
-            self._log("☁️ Subiendo base de datos actualizada hacia Google Cloud Storage...")
+            skipped = res.get("skipped", 0) if isinstance(res, dict) else 0
+            uploaded = res.get("uploaded", 0) if isinstance(res, dict) else 0
+            total_scanned = res.get("total_scanned", 0) if isinstance(res, dict) else 0
 
             # 2. Persistir base de datos
+            self.progress_bar["value"] = 90
+            self.lbl_progress_status.config(text="Persistiendo base de datos actualizada en Google Cloud...", fg="#34D399")
+            self._log("☁️ Sincronizando respaldo de base de datos en Google Cloud Storage...")
+
             bucket = get_bucket()
             if bucket and os.path.exists(DB_PATH):
                 blob = bucket.blob(GCS_DB_BLOB)
                 blob.upload_from_filename(DB_PATH, content_type="application/octet-stream")
-                self._log(f"✅ Base de datos sincronizada: gs://{DEFAULT_BUCKET_NAME}/{GCS_DB_BLOB}")
+                self._log(f"✅ Base de datos persistida: gs://{DEFAULT_BUCKET_NAME}/{GCS_DB_BLOB}")
 
             self.progress_bar["value"] = 100
             self.lbl_progress_status.config(text="¡Sincronización completada con éxito!", fg="#34D399")
             self._log("🎉 ¡PROCESO FINALIZADO CON ÉXITO!")
-            self._log("Todas las piezas nuevas ya están disponibles en la App de Google Cloud.")
+            self._log(f"   • Archivos locales analizados: {total_scanned}")
+            self._log(f"   • Archivos idénticos OMITIDOS (sin costo en GCP): {skipped}")
+            self._log(f"   • Archivos faltantes SUBIDOS a la nube: {uploaded}")
             self._log("=" * 65)
 
             self._refresh_status()
 
-            messagebox.showinfo(
-                "Sincronización Exitosa",
-                "¡Todas las carpetas de prototipos han sido subidas a Google Cloud Storage y registradas en el sistema!\n\n"
-                "Ya están disponibles en la Aplicación de Calidad."
-            )
+            if uploaded == 0:
+                messagebox.showinfo(
+                    "Nube 100% al Día",
+                    "¡Tu repositorio en la nube ya estaba completamente al día!\n\n"
+                    f"• Archivos analizados en Z:\\: {total_scanned}\n"
+                    f"• Archivos ya existentes en Google Cloud: {skipped} (OMITIDOS)\n"
+                    f"• Archivos nuevos subidos: 0\n\n"
+                    "No se requirió subir ningún archivo, garantizando $0.00 en costos innecesarios de GCP."
+                )
+            else:
+                messagebox.showinfo(
+                    "Sincronización Exitosa",
+                    "¡Sincronización incremental completada exitosamente!\n\n"
+                    f"• Archivos ya existentes en Google Cloud (Omitidos): {skipped}\n"
+                    f"• Archivos nuevos o faltantes SUBIDOS: {uploaded}\n\n"
+                    "Solo se transfirió la información faltante, garantizando el mínimo costo en Google Cloud."
+                )
 
         except Exception as e:
             self._log(f"❌ ERROR DURANTE LA SINCRONIZACIÓN: {str(e)}")
@@ -292,7 +331,7 @@ class SigramaSyncApp:
             messagebox.showerror("Error", f"Ocurrió un error al sincronizar:\n{str(e)}")
         finally:
             self.is_running = False
-            self.btn_sync.config(state="normal", bg="#EC2024", text="⚡ SUBIR PROTOTIPOS A GOOGLE CLOUD")
+            self.btn_sync.config(state="normal", bg="#EC2024", text="⚡ SUBIR ÚNICAMENTE ARCHIVOS FALTANTES A GOOGLE CLOUD")
 
 def main():
     root = tk.Tk()
