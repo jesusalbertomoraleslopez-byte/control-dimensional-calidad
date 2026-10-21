@@ -202,37 +202,68 @@ st.markdown("""
     }
     
     /* Active navigation item highlighting: Red Pill style with White Text and White dot */
-    [data-testid="stSidebar"] div[role="radiogroup"] label span {
-        color: #D2D3D5 !important;
-        font-weight: 500 !important;
+    /* Menú Lateral Estilo Google Workspace (Píldoras Material Design 3) */
+    [data-testid="stSidebar"] div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
     }
-    
-    [data-testid="stSidebar"] div[role="radiogroup"] label:hover span {
-        color: #FFFFFF !important;
-    }
-    
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]:checked) {
-        background-color: #EC2024 !important;
-        border-radius: 6px !important;
-        padding: 6px 12px !important;
-        transition: background-color 0.2s ease !important;
-    }
-    
-    /* Reset background colors of all inner elements in the active label to prevent white box overlay and show white text */
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]:checked) div,
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]:checked) span,
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input[type="radio"]:checked) p {
+    [data-testid="stSidebar"] div[role="radiogroup"] {
         background-color: transparent !important;
-        color: #FFFFFF !important;
-        font-weight: bold !important;
+        border: none !important;
+        padding: 0 !important;
+        gap: 2px !important;
+        display: flex !important;
+        flex-direction: column !important;
     }
-    
-    /* Make the selected radio dot white (overriding transparency on the dot element) */
-    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + div,
-    [data-testid="stSidebar"] div[role="radiogroup"] input[type="radio"]:checked + div * {
-        background-color: #FFFFFF !important;
-        border-color: #FFFFFF !important;
-        color: #EC2024 !important;
+    [data-testid="stSidebar"] div[role="radiogroup"] > label {
+        background-color: transparent !important;
+        border: 1px solid transparent !important;
+        color: #CBD5E1 !important;
+        padding: 8px 16px !important;
+        border-radius: 24px !important;
+        transition: all 0.18s ease-in-out !important;
+        margin: 1px 0 !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] label p,
+    [data-testid="stSidebar"] div[role="radiogroup"] label span {
+        font-size: 14.5px !important;
+        font-family: 'Questrial', sans-serif !important;
+        font-weight: 500 !important;
+        color: #CBD5E1 !important;
+        line-height: 1.3 !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:hover span {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border-color: transparent !important;
+        color: #FFFFFF !important;
+        border-radius: 24px !important;
+    }
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"],
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label[data-checked="true"] span,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input[type="radio"]:checked),
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input[type="radio"]:checked) p,
+    [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input[type="radio"]:checked) span {
+        background-color: rgba(236, 32, 36, 0.22) !important;
+        border: 1px solid rgba(236, 32, 36, 0.55) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border-radius: 24px !important;
+    }
+
+    /* Botón Google Workspace 'Redactar / Nuevo' (FAB Pill) */
+    div.stButton > button[key="btn_google_fab_dimensional"] {
+        border-radius: 20px !important;
+        padding: 10px 20px !important;
+        font-size: 14.5px !important;
+        font-weight: 700 !important;
+        box-shadow: 0 4px 14px rgba(236, 32, 36, 0.35) !important;
+        border: 1px solid rgba(236, 32, 36, 0.8) !important;
+        margin-bottom: 8px !important;
     }
     
     /* Layout styling */
@@ -441,52 +472,79 @@ else:
     </div>
     """, unsafe_allow_html=True)
     
-    # Navigation Menu
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📌 MENÚ DE NAVEGACIÓN")
-    
-    menu_options = [
-        "1. Página Principal (Centro de Control)",
-        "2. Área de Consulta",
-        "3. Ingeniería",
-        "   3.1 Carga de Registros de Diseño",
-        "   3.2 Visualizador 3D CAD",
-        "   3.3 Impresión de Reportes de Ingeniería",
-        "4. Calidad",
-        "   4.1 Dashboard de Calidad",
-        "   4.2 Carga de Inspección (Excel)",
-        "   4.3 Consolidación de Remisión",
-        "   4.4 Impresión de Reportes de Calidad",
-        "5. Manufactura Inteligente e Industria 4.0",
-        "6. Manual de Operación"
+    # --- NAVEGACIÓN ESTILO GOOGLE WORKSPACE ---
+    if st.sidebar.button("➕ Nuevo Registro", key="btn_google_fab_dimensional", use_container_width=True, type="primary"):
+        st.session_state["nav_menu_selection"] = "   3.1 Carga de Registros de Diseño"
+        st.session_state["dim_google_label"] = "➕ Diseño"
+        st.rerun()
+
+    st.sidebar.markdown("<p style='font-family: \"Montserrat\", sans-serif; font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 10px; margin-bottom: 6px;'>Menú Principal:</p>", unsafe_allow_html=True)
+
+    DIM_MAP = {
+        "📊 Resumen": "1. Página Principal (Centro de Control)",
+        "🔍 Consultas": "2. Área de Consulta",
+        "📐 Ingeniería": "3. Ingeniería",
+        "➕ Diseño": "   3.1 Carga de Registros de Diseño",
+        "🧊 CAD 3D": "   3.2 Visualizador 3D CAD",
+        "📑 Reportes": "   3.3 Impresión de Reportes de Ingeniería",
+        "🛡️ Calidad": "4. Calidad",
+        "📈 Métricas": "   4.1 Dashboard de Calidad",
+        "📥 Inspección": "   4.2 Carga de Inspección (Excel)",
+        "🚚 Remisiones": "   4.3 Consolidación de Remisión",
+        "📜 Certificados": "   4.4 Impresión de Reportes de Calidad",
+        "🏭 Industria": "5. Manufactura Inteligente e Industria 4.0",
+        "📖 Manual": "6. Manual de Operación",
+        "⚙️ Mantenimiento": "7. Área de Mantenimiento y Almacenamiento",
+        "🗄️ Registros": "   7.1 Gestión de Registros",
+        "📁 Almacén": "   7.2 Explorador de Almacenamiento Local",
+        "☁️ Despliegue": "   7.3 Integración GitHub & Despliegue Streamlit",
+        "📚 Glosario": "   7.4 Glosario de Documentación (Oculto solo Administrador)",
+        "📋 SGC": "   7.5 Sistema de Gestión de Calidad (SGC) (Oculto solo Administrador)"
+    }
+    DIM_REVERSE_MAP = {v: k for k, v in DIM_MAP.items()}
+
+    google_dim_options = [
+        "📊 Resumen",
+        "🔍 Consultas",
+        "📐 Ingeniería",
+        "➕ Diseño",
+        "🧊 CAD 3D",
+        "📑 Reportes",
+        "🛡️ Calidad",
+        "📈 Métricas",
+        "📥 Inspección",
+        "🚚 Remisiones",
+        "📜 Certificados",
+        "🏭 Industria",
+        "📖 Manual",
     ]
-    
     if st.session_state["role"] == "Administrador":
-        menu_options.extend([
-            "7. Área de Mantenimiento y Almacenamiento",
-            "   7.1 Gestión de Registros",
-            "   7.2 Explorador de Almacenamiento Local",
-            "   7.3 Integración GitHub & Despliegue Streamlit",
-            "   7.4 Glosario de Documentación (Oculto solo Administrador)",
-            "   7.5 Sistema de Gestión de Calidad (SGC) (Oculto solo Administrador)"
+        google_dim_options.extend([
+            "⚙️ Mantenimiento",
+            "🗄️ Registros",
+            "📁 Almacén",
+            "☁️ Despliegue",
+            "📚 Glosario",
+            "📋 SGC"
         ])
-    
+
     if "nav_menu_selection" not in st.session_state:
         st.session_state["nav_menu_selection"] = "1. Página Principal (Centro de Control)"
 
     if "redirect_to_page" in st.session_state:
         target = st.session_state.pop("redirect_to_page")
-        if target in menu_options:
+        if target in DIM_REVERSE_MAP:
             st.session_state["nav_menu_selection"] = target
 
-    if st.query_params.get("menu") == "consulta" and "2. Área de Consulta" in menu_options:
-        st.session_state["nav_menu_selection"] = "2. Área de Consulta"
+    curr_val = st.session_state.get("nav_menu_selection", "1. Página Principal (Centro de Control)")
+    curr_label = DIM_REVERSE_MAP.get(curr_val, "📊 Resumen")
+    if curr_label not in google_dim_options:
+        curr_label = google_dim_options[0]
+    idx_dim = google_dim_options.index(curr_label)
 
-    current_idx = 0
-    if st.session_state.get("nav_menu_selection") in menu_options:
-        current_idx = menu_options.index(st.session_state["nav_menu_selection"])
-
-    choice = st.sidebar.radio("Ir a la sección:", menu_options, index=current_idx, key="nav_menu_selection", label_visibility="collapsed")
+    sel_dim_label = st.sidebar.radio("Navegación:", google_dim_options, index=idx_dim, key="radio_dim_google", label_visibility="collapsed")
+    choice = DIM_MAP.get(sel_dim_label, "1. Página Principal (Centro de Control)")
+    st.session_state["nav_menu_selection"] = choice
     
     st.sidebar.markdown("---")
     if st.sidebar.button("Cerrar Sesión", key="logout_btn"):
