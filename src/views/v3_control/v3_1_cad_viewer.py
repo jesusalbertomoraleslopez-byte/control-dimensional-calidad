@@ -608,6 +608,41 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         </div>
         """
 
+    # Catálogo serializado para el buscador y autocompletado interactivo estilo Visual Studio Code
+    import json
+    catalog_source = registered_pieces if 'registered_pieces' in locals() and registered_pieces else []
+    try:
+        conn_all = get_connection()
+        c_all = conn_all.cursor()
+        c_all.execute("SELECT * FROM piezas ORDER BY CASE WHEN consecutivo_ing IS NOT NULL AND consecutivo_ing != '' THEN 0 ELSE 1 END, consecutivo_ing, nombre_sku")
+        all_db_pieces = [dict(r) for r in c_all.fetchall()]
+        conn_all.close()
+        if all_db_pieces:
+            catalog_source = all_db_pieces
+    except Exception:
+        pass
+
+    catalog_pieces_list = []
+    seen_pieces = set()
+    for p in catalog_source:
+        pz_num = str(p.get("numero_pieza", "") or "").strip()
+        sku_str = str(p.get("nombre_sku", "") or "").strip()
+        if not pz_num and not sku_str:
+            continue
+        key = (pz_num, sku_str)
+        if key in seen_pieces:
+            continue
+        seen_pieces.add(key)
+        catalog_pieces_list.append({
+            "pieza": pz_num or sku_str,
+            "sku": sku_str or pz_num,
+            "ing": str(p.get("consecutivo_ing", "") or "").strip(),
+            "material": str(p.get("material", "") or "").strip(),
+            "acabado": str(p.get("acabado_estandar", "") or "").strip(),
+            "ver": f"{p.get('version', '')}-{p.get('revision', '')}".strip("-"),
+        })
+    catalog_json_str = json.dumps(catalog_pieces_list, ensure_ascii=False)
+
     # Three.js embed HTML with dynamic coordinates and overlay
     html_code = f"""
     <!DOCTYPE html>
@@ -733,32 +768,259 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 height: 24px;
             }}
 
-            /* ── Technical Inspection HUD Card (Top Left) ── */
-            #info-overlay {{
+            /* ── Left Floating Container (HUD + VS Code Autocomplete) ── */
+            #hud-left-panel {{
                 position: absolute;
                 top: 12px;
                 left: 12px;
+                width: 300px;
+                max-width: 90vw;
+                z-index: 250;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                pointer-events: none;
+            }}
+            body.parent-fullscreen #hud-left-panel {{
+                top: 20px;
+                left: 20px;
+                width: 380px;
+            }}
+
+            /* ── Technical Inspection HUD Card (Top Left) ── */
+            #info-overlay {{
+                position: relative;
+                top: auto;
+                left: auto;
                 color: #f8fafc;
-                background: rgba(15, 23, 42, 0.90);
+                background: rgba(15, 23, 42, 0.92);
                 backdrop-filter: blur(8px);
                 padding: 12px 14px;
                 border-radius: 8px;
                 font-size: 13px;
                 border: 1px solid rgba(56, 189, 248, 0.3);
                 pointer-events: auto;
-                z-index: 200;
-                width: 300px;
-                max-width: 90vw;
+                width: 100%;
+                box-sizing: border-box;
                 box-shadow: 0 8px 24px rgba(0,0,0,0.35);
                 transition: all 0.2s ease;
             }}
             body.parent-fullscreen #info-overlay {{
-                top: 20px;
-                left: 20px;
-                width: 380px;
                 padding: 16px 20px;
                 font-size: 14px;
                 box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+            }}
+
+            /* ── VS Code Style Piece Autocomplete Component ── */
+            #cad-autocomplete-container {{
+                position: relative;
+                width: 100%;
+                pointer-events: auto;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            }}
+
+            #cad-search-box {{
+                display: flex;
+                align-items: center;
+                background: #000000;
+                color: #ffffff;
+                border: 2px solid #222222;
+                border-radius: 6px;
+                padding: 6px 10px;
+                box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+                transition: all 0.2s ease;
+            }}
+            #cad-search-box:focus-within {{
+                border-color: #007acc;
+                box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.4), 0 6px 18px rgba(0,0,0,0.6);
+            }}
+
+            #cad-search-box .cad-search-icon {{
+                flex-shrink: 0;
+                margin-right: 8px;
+                color: #858585;
+            }}
+
+            #cad-search-input {{
+                flex: 1;
+                background: transparent;
+                border: none;
+                outline: none;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 600;
+                font-family: 'Consolas', 'Courier New', monospace, sans-serif;
+                letter-spacing: 0.5px;
+            }}
+            #cad-search-input::placeholder {{
+                color: #6e7681;
+                font-weight: normal;
+                font-size: 13px;
+            }}
+
+            #cad-search-clear {{
+                background: transparent;
+                border: none;
+                color: #858585;
+                font-size: 18px;
+                line-height: 1;
+                cursor: pointer;
+                padding: 0 4px;
+                display: none;
+                transition: color 0.15s ease;
+            }}
+            #cad-search-clear:hover {{
+                color: #ffffff;
+            }}
+
+            /* VS Code IntelliSense Overlaid Dropdown */
+            #cad-autocomplete-dropdown {{
+                position: absolute;
+                top: calc(100% + 4px);
+                left: 0;
+                right: 0;
+                background: #1e1e1e;
+                border: 1px solid #007acc;
+                border-radius: 4px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+                z-index: 9999;
+                max-height: 280px;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                animation: cadFadeDown 0.12s ease-out;
+            }}
+
+            @keyframes cadFadeDown {{
+                from {{ opacity: 0; transform: translateY(-4px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+
+            #cad-dropdown-header {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 6px 10px;
+                background: #252526;
+                border-bottom: 1px solid #333333;
+                font-size: 11px;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: #9cdcfe;
+                font-weight: 600;
+            }}
+
+            #cad-dropdown-count {{
+                background: #333333;
+                color: #cccccc;
+                padding: 1px 6px;
+                border-radius: 10px;
+                font-size: 10px;
+            }}
+
+            #cad-dropdown-list {{
+                overflow-y: auto;
+                max-height: 220px;
+                display: flex;
+                flex-direction: column;
+            }}
+            #cad-dropdown-list::-webkit-scrollbar {{
+                width: 6px;
+            }}
+            #cad-dropdown-list::-webkit-scrollbar-thumb {{
+                background: #424242;
+                border-radius: 3px;
+            }}
+            #cad-dropdown-list::-webkit-scrollbar-thumb:hover {{
+                background: #555555;
+            }}
+
+            .cad-item {{
+                display: flex;
+                flex-direction: column;
+                padding: 7px 10px;
+                cursor: pointer;
+                border-bottom: 1px solid #2a2d2e;
+                transition: background 0.1s ease;
+            }}
+            .cad-item:last-child {{
+                border-bottom: none;
+            }}
+            .cad-item:hover, .cad-item.active {{
+                background: #04395e !important;
+                color: #ffffff !important;
+            }}
+            .cad-item.active {{
+                outline: 1px solid #007acc;
+            }}
+
+            .cad-item-top {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 8px;
+            }}
+
+            .cad-item-title {{
+                font-size: 13px;
+                font-weight: 600;
+                color: #ffffff;
+                font-family: 'Consolas', monospace;
+            }}
+
+            .cad-item-ing {{
+                font-size: 10px;
+                background: rgba(56, 189, 248, 0.2);
+                color: #38bdf8;
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-weight: 600;
+            }}
+
+            .cad-item-sku {{
+                font-size: 11px;
+                color: #94a3b8;
+                margin-top: 2px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }}
+            .cad-item:hover .cad-item-sku, .cad-item.active .cad-item-sku {{
+                color: #cbd5e1;
+            }}
+
+            .cad-match-hl {{
+                color: #4fc1ff;
+                font-weight: 800;
+                text-decoration: underline;
+            }}
+
+            .cad-dropdown-empty {{
+                padding: 16px 12px;
+                text-align: center;
+                color: #94a3b8;
+                font-size: 12px;
+                font-style: italic;
+            }}
+
+            #cad-dropdown-footer {{
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 4px 8px;
+                background: #252526;
+                border-top: 1px solid #333333;
+                font-size: 10px;
+                color: #858585;
+            }}
+            #cad-dropdown-footer kbd {{
+                background: #333333;
+                color: #cccccc;
+                padding: 1px 4px;
+                border-radius: 3px;
+                border: 1px solid #444;
+                font-family: monospace;
             }}
             #hud-header {{
                 display: flex;
@@ -1138,8 +1400,9 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             </div>
         </div>
 
-        <!-- ── Technical Inspection HUD Card (Top Left) ── -->
-        <div id="info-overlay">
+        <!-- ── Left Floating HUD Panel with Quick Search & Inspection Card ── -->
+        <div id="hud-left-panel">
+            <div id="info-overlay">
             <div id="hud-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
                     <span id="hud-badge">FICHA DE INSPECCIÓN DIMENSIONAL</span>
@@ -1175,7 +1438,32 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             </div>
         </div>
 
-        <!-- ── Bottom Overlay Navigation ── -->
+        <!-- VS Code Style Quick Search Box & Overlaid Suggestions Dropdown -->
+        <div id="cad-autocomplete-container">
+            <div id="cad-search-box">
+                <svg class="cad-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="text" id="cad-search-input" placeholder="Buscar pieza (ej. 11-D, P135)..." autocomplete="off" spellcheck="false" />
+                <button id="cad-search-clear" type="button" title="Limpiar búsqueda">&times;</button>
+            </div>
+            <div id="cad-autocomplete-dropdown" style="display:none;">
+                <div id="cad-dropdown-header">
+                    <span id="cad-dropdown-title">Sugerencias VS Code</span>
+                    <span id="cad-dropdown-count">0 piezas</span>
+                </div>
+                <div id="cad-dropdown-list"></div>
+                <div id="cad-dropdown-footer">
+                    <span><kbd>&uarr;</kbd> <kbd>&darr;</kbd> navegar</span>
+                    <span><kbd>&crarr;</kbd> seleccionar</span>
+                    <span><kbd>Esc</kbd> cerrar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Bottom Overlay Navigation ── -->
         <button id="prev-overlay-btn" {prev_disabled_attr} title="Pieza Anterior">⬅️ Pieza Anterior</button>
         <button id="sku-overlay-btn" title="Copiar SKU al portapapeles">📋 SKU: {sku_for_overlay}</button>
         <button id="next-overlay-btn" {next_disabled_attr} title="Siguiente Pieza">Siguiente Pieza ➡️</button>
@@ -2639,6 +2927,236 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 makeArrow(zA, zB);
                 makeLabel(new THREE.Vector3(xRight2 + gap * 0.6, yLow2 - gap * 0.6, (min.z + max.z) / 2), fmt(size.z));
             }}
+
+            // ─── VS Code Style Piece Autocomplete & Quick Search ─────────────────────────
+            (function initPieceAutocomplete() {{
+                const catalog = {catalog_json_str};
+                const input = document.getElementById('cad-search-input');
+                const clearBtn = document.getElementById('cad-search-clear');
+                const dropdown = document.getElementById('cad-autocomplete-dropdown');
+                const list = document.getElementById('cad-dropdown-list');
+                const countBadge = document.getElementById('cad-dropdown-count');
+                const container = document.getElementById('cad-autocomplete-container');
+
+                if (!input || !dropdown || !list || !Array.isArray(catalog)) return;
+
+                // Stop 3D OrbitControls from stealing input / keys
+                ['keydown', 'keyup', 'keypress', 'mousedown', 'pointerdown', 'wheel'].forEach(ev => {{
+                    container.addEventListener(ev, (e) => e.stopPropagation());
+                }});
+
+                let activeMatches = [];
+                let selectedIdx = -1;
+
+                function escapeHtml(text) {{
+                    return String(text || '')
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;');
+                }}
+
+                function highlightMatches(text, query) {{
+                    const escText = escapeHtml(text);
+                    if (!query) return escText;
+                    const cleanQ = query.trim().replace(/[.*+?^${{}}()|[\\]\\]/g, '\\\\$&');
+                    if (!cleanQ) return escText;
+                    const re = new RegExp('(' + cleanQ + ')', 'gi');
+                    return escText.replace(re, '<span class="cad-match-hl">$1</span>');
+                }}
+
+                function renderDropdown(matches, query) {{
+                    activeMatches = matches;
+                    list.innerHTML = '';
+
+                    if (matches.length === 0) {{
+                        const empty = document.createElement('div');
+                        empty.className = 'cad-dropdown-empty';
+                        empty.textContent = 'No se encontraron piezas con "' + query + '"';
+                        list.appendChild(empty);
+                        countBadge.textContent = '0';
+                        selectedIdx = -1;
+                        dropdown.style.display = 'flex';
+                        return;
+                    }}
+
+                    countBadge.textContent = matches.length + (matches.length === 1 ? ' pieza' : ' piezas');
+
+                    matches.forEach((p, idx) => {{
+                        const item = document.createElement('div');
+                        item.className = 'cad-item';
+                        if (idx === 0) item.classList.add('active');
+
+                        const topRow = document.createElement('div');
+                        topRow.className = 'cad-item-top';
+
+                        const title = document.createElement('span');
+                        title.className = 'cad-item-title';
+                        title.innerHTML = highlightMatches(p.pieza, query);
+                        topRow.appendChild(title);
+
+                        if (p.ing) {{
+                            const ingBadge = document.createElement('span');
+                            ingBadge.className = 'cad-item-ing';
+                            ingBadge.textContent = p.ing;
+                            topRow.appendChild(ingBadge);
+                        }}
+
+                        const subRow = document.createElement('div');
+                        subRow.className = 'cad-item-sku';
+                        const extraInfo = [];
+                        if (p.material) extraInfo.push(p.material);
+                        if (p.acabado && p.acabado !== 'Estándar') extraInfo.push(p.acabado);
+                        if (p.ver) extraInfo.push(p.ver);
+                        subRow.textContent = extraInfo.length ? extraInfo.join(' · ') : p.sku;
+
+                        item.appendChild(topRow);
+                        item.appendChild(subRow);
+
+                        item.addEventListener('mouseenter', () => {{
+                            setActiveItem(idx, false);
+                        }});
+
+                        item.addEventListener('click', (e) => {{
+                            e.preventDefault();
+                            selectPiece(p);
+                        }});
+
+                        list.appendChild(item);
+                    }});
+
+                    selectedIdx = 0;
+                    dropdown.style.display = 'flex';
+                }}
+
+                function setActiveItem(idx, scrollIntoView) {{
+                    const items = list.querySelectorAll('.cad-item');
+                    items.forEach(it => it.classList.remove('active'));
+                    if (idx >= 0 && idx < items.length) {{
+                        selectedIdx = idx;
+                        items[idx].classList.add('active');
+                        if (scrollIntoView) {{
+                            items[idx].scrollIntoView({{ block: 'nearest' }});
+                        }}
+                    }}
+                }}
+
+                function filterAndShow() {{
+                    const q = input.value.trim().toLowerCase();
+                    if (!q) {{
+                        clearBtn.style.display = 'none';
+                        closeDropdown();
+                        return;
+                    }}
+                    clearBtn.style.display = 'block';
+
+                    const starts = [];
+                    const contains = [];
+                    const secondary = [];
+
+                    for (let i = 0; i < catalog.length; i++) {{
+                        const p = catalog[i];
+                        const pz = (p.pieza || '').toLowerCase();
+                        const sku = (p.sku || '').toLowerCase();
+                        const ing = (p.ing || '').toLowerCase();
+
+                        if (pz.startsWith(q)) {{
+                            starts.push(p);
+                        }} else if (pz.includes(q)) {{
+                            contains.push(p);
+                        }} else if (sku.includes(q) || ing.includes(q)) {{
+                            secondary.push(p);
+                        }}
+                    }}
+
+                    const merged = starts.concat(contains, secondary).slice(0, 30);
+                    renderDropdown(merged, input.value.trim());
+                }}
+
+                function closeDropdown() {{
+                    dropdown.style.display = 'none';
+                    selectedIdx = -1;
+                }}
+
+                function selectPiece(p) {{
+                    if (!p) return;
+                    input.value = p.pieza;
+                    closeDropdown();
+
+                    const isFs = ("{direct_fullscreen}".toLowerCase() === "true") || (window.location.search && window.location.search.includes('fullscreen=cad')) || (window.parent && window.parent.location.search && window.parent.location.search.includes('fullscreen=cad'));
+                    
+                    let targetUrl = '';
+                    if (isFs) {{
+                        targetUrl = '?fullscreen=cad&sku=' + encodeURIComponent(p.sku) + '&pieza=' + encodeURIComponent(p.pieza);
+                    }} else {{
+                        const curSearch = new URLSearchParams(window.parent ? window.parent.location.search : window.location.search);
+                        curSearch.set('sku', p.sku);
+                        curSearch.set('pieza', p.pieza);
+                        targetUrl = '?' + curSearch.toString();
+                    }}
+
+                    if (window.parent && window.parent !== window) {{
+                        window.parent.location.search = targetUrl;
+                    }} else {{
+                        window.location.search = targetUrl;
+                    }}
+                }}
+
+                // Input events
+                input.addEventListener('input', filterAndShow);
+                input.addEventListener('focus', () => {{
+                    if (input.value.trim()) filterAndShow();
+                }});
+
+                clearBtn.addEventListener('click', (e) => {{
+                    e.stopPropagation();
+                    input.value = '';
+                    clearBtn.style.display = 'none';
+                    closeDropdown();
+                    input.focus();
+                }});
+
+                // Keyboard Navigation (VS Code style)
+                input.addEventListener('keydown', (e) => {{
+                    if (dropdown.style.display === 'none') {{
+                        if (e.key === 'ArrowDown' || e.key === 'Enter') {{
+                            if (input.value.trim()) {{
+                                filterAndShow();
+                                e.preventDefault();
+                            }}
+                        }}
+                        return;
+                    }}
+
+                    const items = list.querySelectorAll('.cad-item');
+                    if (items.length === 0) return;
+
+                    if (e.key === 'ArrowDown') {{
+                        e.preventDefault();
+                        const nextIdx = (selectedIdx + 1) % items.length;
+                        setActiveItem(nextIdx, true);
+                    }} else if (e.key === 'ArrowUp') {{
+                        e.preventDefault();
+                        const prevIdx = (selectedIdx - 1 + items.length) % items.length;
+                        setActiveItem(prevIdx, true);
+                    }} else if (e.key === 'Enter') {{
+                        e.preventDefault();
+                        if (selectedIdx >= 0 && selectedIdx < activeMatches.length) {{
+                            selectPiece(activeMatches[selectedIdx]);
+                        }}
+                    }} else if (e.key === 'Escape') {{
+                        e.preventDefault();
+                        closeDropdown();
+                    }}
+                }});
+
+                // Close on outside click
+                document.addEventListener('click', (e) => {{
+                    if (!container.contains(e.target)) {{
+                        closeDropdown();
+                    }}
+                }});
+            }})();
         </script>
     </body>
     </html>
