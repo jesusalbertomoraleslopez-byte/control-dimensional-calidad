@@ -207,6 +207,15 @@ def get_file_bytes(path_or_uri: Any) -> Optional[bytes]:
         blob = bucket.blob(blob_name)
         if blob.exists():
             return blob.download_as_bytes()
+        # Fallback: si la pieza fue auditada y movida entre Sin_Auditar/ y Auditadas/
+        if blob_name.startswith("Sin_Auditar/"):
+            alt_blob = bucket.blob("Auditadas/" + blob_name[len("Sin_Auditar/"):])
+            if alt_blob.exists():
+                return alt_blob.download_as_bytes()
+        elif blob_name.startswith("Auditadas/"):
+            alt_blob = bucket.blob("Sin_Auditar/" + blob_name[len("Auditadas/"):])
+            if alt_blob.exists():
+                return alt_blob.download_as_bytes()
     except Exception as e:
         print(f"[GCS WARNING] No se pudo descargar {blob_name} de GCS: {e}")
 
@@ -218,7 +227,7 @@ def generate_secure_signed_url(
 ) -> Optional[str]:
     """
     Genera una URL firmada V4 con expiración temporal para acceso seguro y restringido.
-    Solo funciona si la cuenta de servicio cuenta con su llave privada.
+    Soporta llave privada local o firma IAM mediante token en Cloud Run.
     """
     if not path_or_uri or not isinstance(path_or_uri, (str, os.PathLike)):
         return None
@@ -243,8 +252,26 @@ def generate_secure_signed_url(
             method="GET"
         )
         return url
-    except Exception as e:
-        print(f"[GCS WARNING] No se pudo generar URL firmada para {blob_name}: {e}")
+    except Exception:
+        # Intento secundario en Cloud Run usando credenciales ADC + IAM SignBlob
+        try:
+            import google.auth
+            from google.auth.transport import requests as auth_requests
+            creds, _ = google.auth.default()
+            if not creds.valid:
+                creds.refresh(auth_requests.Request())
+            sa_email = getattr(creds, "service_account_email", None)
+            if sa_email and creds.token:
+                blob = bucket.blob(blob_name)
+                return blob.generate_signed_url(
+                    version="v4",
+                    expiration=timedelta(minutes=expiration_minutes),
+                    method="GET",
+                    service_account_email=sa_email,
+                    access_token=creds.token,
+                )
+        except Exception as e2:
+            print(f"[GCS WARNING] No se pudo generar URL firmada para {blob_name}: {e2}")
         return None
 
 def delete_gcs_file(path_or_uri: Any) -> bool:

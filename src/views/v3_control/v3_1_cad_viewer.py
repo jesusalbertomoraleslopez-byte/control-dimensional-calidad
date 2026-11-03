@@ -543,6 +543,8 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
     version_rev_val = "v1-0"
     plano_url = ""
     plano_filename = ""
+    plano_bytes = None
+    plano_data_b64 = ""
     step_url = ""
     step_filename = ""
     
@@ -551,16 +553,35 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         acabado_val = selected_piece.get("acabado_estandar") or "Estándar"
         version_rev_val = f"v{selected_piece.get('version', '1')}-{selected_piece.get('revision', '0')}"
         
-        from src.services.gcs_storage import generate_secure_signed_url
-        plano_path = selected_piece.get("archivo_plano_control") or selected_piece.get("archivo_dibujo_original")
+        from src.services.gcs_storage import generate_secure_signed_url, get_file_bytes
+        plano_path = (
+            selected_piece.get("archivo_plano_control")
+            or selected_piece.get("archivo_dibujo_original")
+            or selected_piece.get("plano_validado_impreso")
+        )
         if plano_path:
-            plano_url = generate_secure_signed_url(plano_path, expiration_minutes=60) or ""
             plano_filename = os.path.basename(str(plano_path).replace("\\", "/").split("?")[0])
+            plano_url = generate_secure_signed_url(plano_path, expiration_minutes=60) or ""
+            # Cache y respaldo directo por bytes (garantiza disponibilidad en Cloud Run aún sin llave privada local)
+            pdf_cache_key = f"_pdf_bytes_{plano_path}"
+            if pdf_cache_key not in st.session_state or st.session_state.get("_pdf_cache_key") != plano_path:
+                plano_bytes = get_file_bytes(plano_path)
+                if not plano_bytes and selected_piece.get("archivo_dibujo_original") and plano_path != selected_piece.get("archivo_dibujo_original"):
+                    alt_pdf_path = selected_piece.get("archivo_dibujo_original")
+                    plano_bytes = get_file_bytes(alt_pdf_path)
+                    if plano_bytes:
+                        plano_filename = os.path.basename(str(alt_pdf_path).replace("\\", "/").split("?")[0])
+                st.session_state[pdf_cache_key] = plano_bytes
+                st.session_state["_pdf_cache_key"] = plano_path
+            else:
+                plano_bytes = st.session_state[pdf_cache_key]
+            if plano_bytes:
+                plano_data_b64 = base64.b64encode(plano_bytes).decode("utf-8")
             
         step_gcs_path = selected_piece.get("archivo_step")
         if step_gcs_path:
-            step_url = generate_secure_signed_url(step_gcs_path, expiration_minutes=60) or ""
             step_filename = os.path.basename(str(step_gcs_path).replace("\\", "/").split("?")[0])
+            step_url = generate_secure_signed_url(step_gcs_path, expiration_minutes=60) or ""
 
     largo_mm = largo_val * 25.4
     ancho_mm = ancho_val * 25.4
@@ -568,13 +589,19 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
     
     if plano_url:
         short_plano = (plano_filename[:22] + '...') if len(plano_filename) > 25 else plano_filename
-        btn_dl_plano_html = f'<a href="{plano_url}" target="_blank" download="{plano_filename}" class="hud-action-btn pdf-btn" title="Descargar Plano de Control (PDF)">📄 Plano Control ({short_plano})</a>'
+        btn_dl_plano_html = f'<a href="{plano_url}" target="_blank" download="{plano_filename}" class="hud-action-btn pdf-btn" title="Abrir / Descargar Plano de Control (PDF)">📄 Plano Control ({short_plano})</a>'
+    elif plano_data_b64:
+        short_plano = (plano_filename[:22] + '...') if len(plano_filename) > 25 else (plano_filename or "Plano.pdf")
+        btn_dl_plano_html = f'<a href="#" id="hud-btn-open-pdf" data-filename="{plano_filename or "Plano_Control.pdf"}" class="hud-action-btn pdf-btn" title="Abrir / Descargar Plano de Control (PDF)">📄 Plano Control ({short_plano})</a>'
     else:
         btn_dl_plano_html = '<span class="hud-action-btn disabled" title="No hay plano de control PDF registrado">⚠️ Sin Plano PDF</span>'
         
     if step_url:
         short_cad = (step_filename[:22] + '...') if len(step_filename) > 25 else step_filename
         btn_dl_cad_html = f'<a href="{step_url}" target="_blank" download="{step_filename}" class="hud-action-btn cad-btn" title="Descargar Modelo 3D STEP">📦 Modelo CAD ({short_cad})</a>'
+    elif step_data_b64 or stl_data_b64:
+        short_cad = (step_filename[:22] + '...') if len(step_filename) > 25 else (step_filename or "Modelo_3D.STEP")
+        btn_dl_cad_html = f'<a href="#" id="hud-btn-dl-cad" data-filename="{step_filename or "Modelo_3D.STEP"}" class="hud-action-btn cad-btn" title="Descargar Modelo 3D STEP">📦 Modelo CAD ({short_cad})</a>'
     else:
         btn_dl_cad_html = '<span class="hud-action-btn disabled" title="Geometría generada paramétricamente">💡 Malla Paramétrica</span>'
 
@@ -3157,6 +3184,61 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     }}
                 }});
             }})();
+
+            // ─── Direct Blob Handlers for HUD PDF & CAD Downloads (Cloud Run Safe) ───
+            (function initHudBlobDownloads() {{
+                const pdfBtn = document.getElementById('hud-btn-open-pdf');
+                const planoB64 = "{plano_data_b64}";
+                if (pdfBtn && planoB64) {{
+                    pdfBtn.addEventListener('click', (e) => {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {{
+                            const raw = atob(planoB64);
+                            const uint8 = new Uint8Array(raw.length);
+                            for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+                            const blob = new Blob([uint8], {{ type: 'application/pdf' }});
+                            const blobUrl = URL.createObjectURL(blob);
+                            const win = window.open(blobUrl, '_blank');
+                            if (!win) {{
+                                const a = document.createElement('a');
+                                a.href = blobUrl;
+                                a.download = pdfBtn.getAttribute('data-filename') || 'Plano_Control.pdf';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            }}
+                        }} catch (err) {{
+                            console.error('Error abriendo PDF:', err);
+                        }}
+                    }});
+                }}
+
+                const cadBtn = document.getElementById('hud-btn-dl-cad');
+                if (cadBtn) {{
+                    cadBtn.addEventListener('click', (e) => {{
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {{
+                            const b64 = (typeof stepDataB64 !== 'undefined' && stepDataB64) ? stepDataB64 : ((typeof stlDataB64 !== 'undefined' && stlDataB64) ? stlDataB64 : '');
+                            if (!b64) return;
+                            const raw = atob(b64);
+                            const uint8 = new Uint8Array(raw.length);
+                            for (let i = 0; i < raw.length; i++) uint8[i] = raw.charCodeAt(i);
+                            const blob = new Blob([uint8], {{ type: 'application/octet-stream' }});
+                            const blobUrl = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = blobUrl;
+                            a.download = cadBtn.getAttribute('data-filename') || 'Modelo_3D.STEP';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                        }} catch (err) {{
+                            console.error('Error descargando CAD:', err);
+                        }}
+                    }});
+                }}
+            }})();
         </script>
     </body>
     </html>
@@ -3294,11 +3376,12 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
         from src.services.gcs_storage import get_file_bytes, generate_secure_signed_url
 
-        pdf_orig_path = selected_piece["archivo_plano_control"] if selected_piece else None
-        pdf_bytes = get_file_bytes(pdf_orig_path)
-        if not pdf_bytes and selected_piece and selected_piece.get("archivo_dibujo_original"):
-            pdf_orig_path = selected_piece.get("archivo_dibujo_original")
-            pdf_bytes = get_file_bytes(pdf_orig_path)
+        pdf_orig_path = (
+            selected_piece.get("archivo_plano_control")
+            or selected_piece.get("archivo_dibujo_original")
+            or selected_piece.get("plano_validado_impreso")
+        ) if selected_piece else None
+        pdf_bytes = plano_bytes if plano_bytes else (get_file_bytes(pdf_orig_path) if pdf_orig_path else None)
 
         if pdf_bytes:
             pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
