@@ -3039,12 +3039,15 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
 
                 function highlightMatches(text, query) {{
-                    const escText = escapeHtml(text);
-                    if (!query) return escText;
-                    const cleanQ = query.trim().replace(/[.*+?^${{}}()|[\\]\\]/g, '\\\\$&');
-                    if (!cleanQ) return escText;
-                    const re = new RegExp('(' + cleanQ + ')', 'gi');
-                    return escText.replace(re, '<span class="cad-match-hl">$1</span>');
+                    const rawText = String(text || '');
+                    const cleanQ = String(query || '').trim();
+                    if (!cleanQ) return escapeHtml(rawText);
+                    const idx = rawText.toLowerCase().indexOf(cleanQ.toLowerCase());
+                    if (idx === -1) return escapeHtml(rawText);
+                    const before = escapeHtml(rawText.slice(0, idx));
+                    const match = escapeHtml(rawText.slice(idx, idx + cleanQ.length));
+                    const after = escapeHtml(rawText.slice(idx + cleanQ.length));
+                    return before + '<span class="cad-match-hl">' + match + '</span>' + after;
                 }}
 
                 function renderDropdown(matches, query) {{

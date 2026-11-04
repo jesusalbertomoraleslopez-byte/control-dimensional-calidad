@@ -4,5 +4,5 @@ echo =======================================================
 echo Iniciando Servidor Streamlit Local...
 echo =======================================================
 cd /d "C:\Users\albertol\.gemini\antigravity\scratch\control-dimensional-calidad"
-py -m streamlit run app.py
+"C:\Users\albertol\AppData\Local\Programs\Python\Python312\python.exe" -m streamlit run app.py --server.port 8501
 pause
