@@ -2436,6 +2436,9 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             let cameraHelper = null;
             let lastHandPos = null;
             let lastPinchDist = null;
+            let latestHandLandmarks = null;
+            let isSendingFrame = false;
+            let lastSendTimestamp = 0;
             let gCanvasCtx = gestureCanvas ? gestureCanvas.getContext('2d') : null;
 
             // Conexiones de los 21 puntos anatómicos de la mano
@@ -2447,26 +2450,52 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
             ];
 
-            function onHandResults(results) {{
-                if (!gestureActive || !gCanvasCtx || !gestureCanvas) return;
+            // Rotación y Zoom orbital compatibles con Three.js r128 (OrbitControls no expone rotateLeft/dollyIn públicos)
+            function orbitCameraBy(deltaTheta, deltaPhi) {{
+                try {{
+                    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+                    const spherical = new THREE.Spherical().setFromVector3(offset);
+                    spherical.theta -= deltaTheta;
+                    spherical.phi -= deltaPhi;
+                    const EPS = 0.001;
+                    spherical.phi = Math.max(EPS, Math.min(Math.PI - EPS, spherical.phi));
+                    offset.setFromSpherical(spherical);
+                    camera.position.copy(controls.target).add(offset);
+                    camera.lookAt(controls.target);
+                    controls.update();
+                }} catch (e) {{
+                    console.warn('Error en orbitCameraBy:', e);
+                }}
+            }}
 
+            function dollyCameraBy(scaleFactor) {{
+                try {{
+                    const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
+                    offset.multiplyScalar(scaleFactor);
+                    const dist = offset.length();
+                    if (dist > 0.2 && dist < 5000) {{
+                        camera.position.copy(controls.target).add(offset);
+                        camera.updateProjectionMatrix();
+                        controls.update();
+                    }}
+                }} catch (e) {{
+                    console.warn('Error en dollyCameraBy:', e);
+                }}
+            }}
+
+            // Dibuja el video en vivo a 60 FPS independientemente de la velocidad de MediaPipe WASM
+            function renderGestureVideoFrame() {{
+                if (!gestureActive || !gCanvasCtx || !gestureCanvas) return;
                 const cw = gestureCanvas.width;
                 const ch = gestureCanvas.height;
 
-                gCanvasCtx.clearRect(0, 0, cw, ch);
-
-                // Dibujar el fotograma en vivo de la cámara
-                if (gestureVideo && gestureVideo.videoWidth > 0) {{
+                if (gestureVideo && gestureVideo.readyState >= 2 && gestureVideo.videoWidth > 0) {{
+                    gCanvasCtx.clearRect(0, 0, cw, ch);
                     gCanvasCtx.drawImage(gestureVideo, 0, 0, cw, ch);
-                }} else if (results.image) {{
-                    gCanvasCtx.drawImage(results.image, 0, 0, cw, ch);
                 }}
 
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
-                    const lms = results.multiHandLandmarks[0];
-
-                    // Dibujar esqueleto de la mano en verde neón brillante
-                    // El canvas tiene transform: scaleX(-1) en CSS, por lo que lms[i].x * cw se alinea perfectamente
+                if (latestHandLandmarks) {{
+                    const lms = latestHandLandmarks;
                     gCanvasCtx.strokeStyle = '#10b981';
                     gCanvasCtx.lineWidth = 2.5;
                     for (let c = 0; c < HAND_CONNECTIONS.length; c++) {{
@@ -2482,7 +2511,6 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         gCanvasCtx.stroke();
                     }}
 
-                    // Dibujar articulaciones
                     for (let i = 0; i < lms.length; i++) {{
                         const px = lms[i].x * cw;
                         const py = lms[i].y * ch;
@@ -2491,64 +2519,73 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         gCanvasCtx.fillStyle = (i === 4 || i === 8) ? '#38bdf8' : (i === 9 ? '#f59e0b' : '#22c55e');
                         gCanvasCtx.fill();
                     }}
+                }}
+            }}
 
-                    // Palma de la mano (Landmark 9)
-                    // En vista de espejo, cuando el usuario mueve su mano a su derecha,
-                    // en la cámara real el objeto se mueve hacia x=0, por lo que 1 - lms[9].x aumenta hacia la derecha
-                    const palmX = 1 - lms[9].x;
-                    const palmY = lms[9].y;
+            function onHandResults(results) {{
+                try {{
+                    if (!gestureActive) return;
 
-                    // Detección de pellizco (Pulgar 4 a Índice 8)
-                    const dxPinch = lms[4].x - lms[8].x;
-                    const dyPinch = lms[4].y - lms[8].y;
-                    const pinchDist = Math.hypot(dxPinch, dyPinch);
-                    const isPinching = pinchDist < 0.085;
+                    if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
+                        const lms = results.multiHandLandmarks[0];
+                        latestHandLandmarks = lms;
 
-                    if (isPinching) {{
-                        if (gestureStatusBadge) {{
-                            gestureStatusBadge.style.color = '#38bdf8';
-                            gestureStatusBadge.textContent = '🤏 Pellizco Activo: Zoom CAD';
-                        }}
-                        if (lastPinchDist !== null) {{
-                            const deltaPinch = pinchDist - lastPinchDist;
-                            if (Math.abs(deltaPinch) > 0.003) {{
-                                if (deltaPinch > 0) {{
-                                    controls.dollyIn(1.035);
-                                }} else {{
-                                    controls.dollyOut(1.035);
+                        // Palma de la mano (Landmark 9)
+                        const palmX = 1 - lms[9].x;
+                        const palmY = lms[9].y;
+
+                        // Detección de pellizco (Pulgar 4 a Índice 8)
+                        const dxPinch = lms[4].x - lms[8].x;
+                        const dyPinch = lms[4].y - lms[8].y;
+                        const pinchDist = Math.hypot(dxPinch, dyPinch);
+                        const isPinching = pinchDist < 0.085;
+
+                        if (isPinching) {{
+                            if (gestureStatusBadge) {{
+                                gestureStatusBadge.style.color = '#38bdf8';
+                                gestureStatusBadge.textContent = '🤏 Pellizco Activo: Zoom CAD';
+                            }}
+                            if (lastPinchDist !== null) {{
+                                const deltaPinch = pinchDist - lastPinchDist;
+                                if (Math.abs(deltaPinch) > 0.003) {{
+                                    if (deltaPinch > 0) {{
+                                        dollyCameraBy(0.96);
+                                    }} else {{
+                                        dollyCameraBy(1.04);
+                                    }}
                                 }}
-                                controls.update();
                             }}
+                            lastPinchDist = pinchDist;
+                            lastHandPos = null;
+                        }} else {{
+                            if (gestureStatusBadge) {{
+                                gestureStatusBadge.style.color = '#22c55e';
+                                gestureStatusBadge.textContent = '🖐️ Mano Detectada: Rotando';
+                            }}
+                            lastPinchDist = null;
+
+                            if (lastHandPos !== null) {{
+                                const dx = palmX - lastHandPos.x;
+                                const dy = palmY - lastHandPos.y;
+
+                                if (Math.hypot(dx, dy) > 0.002) {{
+                                    const speed = 4.8;
+                                    orbitCameraBy(dx * speed, -dy * speed);
+                                }}
+                            }}
+                            lastHandPos = {{ x: palmX, y: palmY }};
                         }}
-                        lastPinchDist = pinchDist;
-                        lastHandPos = null;
                     }} else {{
+                        latestHandLandmarks = null;
                         if (gestureStatusBadge) {{
-                            gestureStatusBadge.style.color = '#22c55e';
-                            gestureStatusBadge.textContent = '🖐️ Mano Detectada: Rotando';
+                            gestureStatusBadge.style.color = '#94a3b8';
+                            gestureStatusBadge.textContent = '👁️ Coloca tu mano frente a la cámara';
                         }}
+                        lastHandPos = null;
                         lastPinchDist = null;
-
-                        if (lastHandPos !== null) {{
-                            const dx = palmX - lastHandPos.x;
-                            const dy = palmY - lastHandPos.y;
-
-                            if (Math.hypot(dx, dy) > 0.003) {{
-                                const speed = 5.2;
-                                controls.rotateLeft(dx * speed);
-                                controls.rotateUp(-dy * speed);
-                                controls.update();
-                            }}
-                        }}
-                        lastHandPos = {{ x: palmX, y: palmY }};
                     }}
-                }} else {{
-                    if (gestureStatusBadge) {{
-                        gestureStatusBadge.style.color = '#94a3b8';
-                        gestureStatusBadge.textContent = '👁️ Coloca tu mano frente a la cámara';
-                    }}
-                    lastHandPos = null;
-                    lastPinchDist = null;
+                }} catch (err) {{
+                    console.warn('Error en onHandResults:', err);
                 }}
             }}
 
@@ -2556,15 +2593,29 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             let gestureStream = null;
             let selectedCameraId = null;
 
-            async function stepGestureDetection() {{
+            function stepGestureDetection() {{
                 if (!gestureActive) return;
-                if (gestureVideo && gestureVideo.readyState >= 2 && handsDetector) {{
-                    try {{
-                        await handsDetector.send({{ image: gestureVideo }});
-                    }} catch (e) {{
-                        console.warn('Frame detection error:', e);
-                    }}
+
+                // 1. Pintar siempre el video en vivo (nunca se congela)
+                renderGestureVideoFrame();
+
+                // 2. Enviar fotograma a MediaPipe sin bloquear el bucle de video
+                const now = performance.now();
+                if (isSendingFrame && (now - lastSendTimestamp > 1500)) {{
+                    isSendingFrame = false; // Watchdog anti-bloqueo
                 }}
+
+                if (!isSendingFrame && gestureVideo && gestureVideo.readyState >= 2 && gestureVideo.videoWidth > 0 && !gestureVideo.paused && handsDetector) {{
+                    isSendingFrame = true;
+                    lastSendTimestamp = now;
+                    handsDetector.send({{ image: gestureVideo }}).then(() => {{
+                        isSendingFrame = false;
+                    }}).catch((e) => {{
+                        isSendingFrame = false;
+                        console.warn('Frame detection error:', e);
+                    }});
+                }}
+
                 if (gestureActive) {{
                     animFrameId = requestAnimationFrame(stepGestureDetection);
                 }}
@@ -2591,6 +2642,10 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 if (gestureVideo) {{
                     gestureVideo.srcObject = gestureStream;
                     await gestureVideo.play();
+                    if (gestureStatusBadge) {{
+                        gestureStatusBadge.style.color = '#94a3b8';
+                        gestureStatusBadge.textContent = '👁️ Coloca tu mano frente a la cámara';
+                    }}
                 }}
 
                 await populateCameraDropdown();
