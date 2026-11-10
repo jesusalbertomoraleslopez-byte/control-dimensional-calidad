@@ -1425,7 +1425,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             <!-- Telemetría JSON en tiempo real (Motor NUI) -->
             <pre id="gesture-json-output" style="margin: 0; padding: 6px 8px; font-size: 9.5px; color: #4ade80; background: #090d16; border-top: 1px solid rgba(16, 185, 129, 0.25); font-family: 'Consolas', monospace; line-height: 1.25; white-space: pre; overflow-x: hidden;">{{"comando":"NINGUNO","parametros":{{"eje":"NA","intensidad":0.0}}}}</pre>
             <div style="padding: 5px 8px; font-size: 9.5px; color: #cbd5e1; background: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); line-height: 1.35; text-align: left;">
-                <span style="color: #4ade80; font-weight: bold;">🖐️ 5 Dedos (X/Y):</span> ROTAR &nbsp;|&nbsp;
+                <span style="color: #4ade80; font-weight: bold;">✊ Puño / 🖐️ Palma (X/Y):</span> ROTAR &nbsp;|&nbsp;
                 <span style="color: #f59e0b; font-weight: bold;">👆 Mano en L (Z):</span> GIRAR<br>
                 <span style="color: #38bdf8; font-weight: bold;">🤏 Pinza Abre/Cierra:</span> ZOOM_IN / ZOOM_OUT
             </div>
@@ -2606,6 +2606,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
                         const openFingersCount = (thumbExt ? 1 : 0) + (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0);
                         const isOpenPalm = (openFingersCount >= 4) && middleExt && ringExt;
+                        const isClosedFist = (!indexExt && !middleExt && !ringExt && !pinkyExt);
                         const isThumbIndexOnly = thumbExt && indexExt && !middleExt && !ringExt && !pinkyExt;
 
                         // Coordenadas de la palma (Landmark 9) espejadas
@@ -2616,32 +2617,34 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         const pinchDist = Math.hypot(lms[4].x - lms[8].x, lms[4].y - lms[8].y);
                         const rollAngle = Math.atan2(lms[8].y - lms[0].y, (1 - lms[8].x) - (1 - lms[0].x));
 
-                        // ── REGLA 1: MANO ABIERTA (5 DEDOS EXTENDIDOS) -> ROTAR (Eje X o Y) ──
-                        if (isOpenPalm) {{
+                        // ── REGLA 1: PUÑO CERRADO (✊) O MANO ABIERTA (🖐️) -> ROTAR (Orbitar Eje X o Y) ──
+                        if (isClosedFist || isOpenPalm) {{
                             lastPinchDist = null;
                             lastRollAngle = null;
+                            const gestureIcon = isClosedFist ? '✊' : '🖐️';
+                            const gestureLabel = isClosedFist ? 'Puño cerrado' : 'Mano abierta';
 
                             if (lastHandPos !== null) {{
                                 const dx = palmX - lastHandPos.x;
                                 const dy = palmY - lastHandPos.y;
                                 const distMove = Math.hypot(dx, dy);
 
-                                if (distMove > 0.003) {{
+                                if (distMove > 0.0025) {{
                                     const ejePrincipal = Math.abs(dx) >= Math.abs(dy) ? "X" : "Y";
-                                    const intensidad = Math.min(1.0, Math.max(0.05, distMove / 0.055));
-                                    const speed = 5.0;
+                                    const intensidad = Math.min(1.0, Math.max(0.05, distMove / 0.05));
+                                    const speed = 5.5;
                                     orbitCameraBy(dx * speed, -dy * speed);
                                     emitNuiCommand("ROTAR", ejePrincipal, intensidad);
 
                                     if (gestureStatusBadge) {{
                                         gestureStatusBadge.style.color = '#22c55e';
-                                        gestureStatusBadge.textContent = `🖐️ ROTAR (Eje ${{ejePrincipal}} | Int: ${{intensidad.toFixed(2)}})`;
+                                        gestureStatusBadge.textContent = `${{gestureIcon}} ROTAR (Eje ${{ejePrincipal}} | Int: ${{intensidad.toFixed(2)}})`;
                                     }}
                                 }} else {{
                                     emitNuiCommand("NINGUNO", "NA", 0.0);
                                     if (gestureStatusBadge) {{
                                         gestureStatusBadge.style.color = '#94a3b8';
-                                        gestureStatusBadge.textContent = '🖐️ Mano abierta (Estática)';
+                                        gestureStatusBadge.textContent = `${{gestureIcon}} ${{gestureLabel}} (Mueve para rotar)`;
                                     }}
                                 }}
                             }} else {{
