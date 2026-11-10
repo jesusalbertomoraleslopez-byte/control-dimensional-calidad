@@ -1401,29 +1401,33 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             </button>
         </div>
 
-        <!-- ── Mini Recuadro HUD de Control Gestual (Cámara Web) ── -->
-        <div id="gesture-hud-box" style="display: none; position: absolute; top: 60px; right: 20px; width: 230px; background: rgba(15, 23, 42, 0.94); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <!-- ── Mini Recuadro HUD de Control Gestual NUI (Cámara Web en Vivo + Telemetría JSON) ── -->
+        <div id="gesture-hud-box" style="display: none; position: absolute; top: 60px; right: 20px; width: 250px; background: rgba(15, 23, 42, 0.96); border: 2px solid #10b981; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.65); z-index: 1000; backdrop-filter: blur(8px); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #0f172a; border-bottom: 1px solid rgba(16, 185, 129, 0.4);">
-                <span style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px;">🖐️ CONTROL GESTUAL</span>
+                <span style="font-size: 11px; font-weight: 800; color: #10b981; letter-spacing: 0.5px;">🖐️ CONTROL GESTUAL NUI</span>
                 <button id="btn-close-gesture" title="Cerrar Cámara" style="background: none; border: none; color: #94a3b8; font-size: 14px; font-weight: bold; cursor: pointer; padding: 0 4px; line-height: 1;">✕</button>
             </div>
-            <!-- Selector de Cámara (prioriza Cámara Integrada y descarta celulares por defecto) -->
+            <!-- Selector de Cámara -->
             <div style="padding: 4px 8px; background: #1e293b; border-bottom: 1px solid rgba(255,255,255,0.1);">
                 <select id="gesture-camera-select" title="Seleccionar cámara de video" style="width: 100%; background: #0f172a; color: #38bdf8; border: 1px solid #334155; border-radius: 4px; font-size: 10px; padding: 3px 6px; outline: none; cursor: pointer;">
                     <option value="">Detectando cámaras de la PC...</option>
                 </select>
             </div>
-            <div style="position: relative; width: 230px; height: 165px; background: #000; overflow: hidden;">
-                <!-- Video con tamaño real pero fuera de la vista para que el navegador decodifique a 30fps sin display:none -->
-                <video id="gesture-video" autoplay playsinline muted style="position: absolute; top: 0; left: 0; width: 320px; height: 240px; opacity: 0; pointer-events: none; z-index: -1;"></video>
-                <canvas id="gesture-canvas" width="230" height="165" style="width: 100%; height: 100%; display: block; transform: scaleX(-1);"></canvas>
-                <div id="gesture-status-badge" style="position: absolute; bottom: 6px; left: 6px; right: 6px; background: rgba(0,0,0,0.85); color: #38bdf8; font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 4px 6px; border: 1px solid rgba(56, 189, 248, 0.3); pointer-events: none;">
+            <div style="position: relative; width: 250px; height: 175px; background: #000; overflow: hidden;">
+                <!-- Video 100% visible en primer plano para evitar que Chrome congele/pause la decodificación de hardware -->
+                <video id="gesture-video" autoplay playsinline muted style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 1;"></video>
+                <!-- Canvas transparente superpuesto únicamente para dibujar el esqueleto de 21 puntos -->
+                <canvas id="gesture-canvas" width="250" height="175" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; transform: scaleX(-1); z-index: 2; pointer-events: none; background: transparent;"></canvas>
+                <div id="gesture-status-badge" style="position: absolute; bottom: 6px; left: 6px; right: 6px; z-index: 3; background: rgba(0,0,0,0.85); color: #38bdf8; font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 4px 6px; border: 1px solid rgba(56, 189, 248, 0.3); pointer-events: none;">
                     Iniciando cámara...
                 </div>
             </div>
-            <div style="padding: 6px 8px; font-size: 10px; color: #e2e8f0; background: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); line-height: 1.35; text-align: center;">
-                <span style="color: #4ade80; font-weight: bold;">🖐️ Mueve la mano:</span> Gira el 3D<br>
-                <span style="color: #38bdf8; font-weight: bold;">🤏 Pellizco:</span> Zoom In / Out
+            <!-- Telemetría JSON en tiempo real (Motor NUI) -->
+            <pre id="gesture-json-output" style="margin: 0; padding: 6px 8px; font-size: 9.5px; color: #4ade80; background: #090d16; border-top: 1px solid rgba(16, 185, 129, 0.25); font-family: 'Consolas', monospace; line-height: 1.25; white-space: pre; overflow-x: hidden;">{{"comando":"NINGUNO","parametros":{{"eje":"NA","intensidad":0.0}}}}</pre>
+            <div style="padding: 5px 8px; font-size: 9.5px; color: #cbd5e1; background: #0f172a; border-top: 1px solid rgba(255,255,255,0.08); line-height: 1.35; text-align: left;">
+                <span style="color: #4ade80; font-weight: bold;">🖐️ 5 Dedos (X/Y):</span> ROTAR &nbsp;|&nbsp;
+                <span style="color: #f59e0b; font-weight: bold;">👆 Mano en L (Z):</span> GIRAR<br>
+                <span style="color: #38bdf8; font-weight: bold;">🤏 Pinza Abre/Cierra:</span> ZOOM_IN / ZOOM_OUT
             </div>
         </div>
 
@@ -2422,7 +2426,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             const btnSwFullscreen = document.getElementById('btn-sw-fullscreen');
             if (btnSwFullscreen) btnSwFullscreen.addEventListener('click', () => toggleFullscreen());
 
-            // ─── Control Gestual por Cámara Web (MediaPipe Hands) ─────────────────────────
+            // ─── Motor Experto NUI de Control Gestual por Cámara Web (MediaPipe Hands) ─────────
             const btnSwGesture = document.getElementById('btn-sw-gesture');
             const gestureHudBox = document.getElementById('gesture-hud-box');
             const btnCloseGesture = document.getElementById('btn-close-gesture');
@@ -2430,16 +2434,49 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             const gestureCanvas = document.getElementById('gesture-canvas');
             const gestureStatusBadge = document.getElementById('gesture-status-badge');
             const gestureCameraSelect = document.getElementById('gesture-camera-select');
+            const gestureJsonOutput = document.getElementById('gesture-json-output');
 
             let gestureActive = false;
             let handsDetector = null;
-            let cameraHelper = null;
             let lastHandPos = null;
             let lastPinchDist = null;
+            let lastRollAngle = null;
             let latestHandLandmarks = null;
+            let lastLandmarkTime = 0;
             let isSendingFrame = false;
             let lastSendTimestamp = 0;
             let gCanvasCtx = gestureCanvas ? gestureCanvas.getContext('2d') : null;
+
+            // Canvas 2D offscreen para alimentar a MediaPipe sin bloqueos de textura WebGL de video en Chrome
+            const mpInputCanvas = document.createElement('canvas');
+            mpInputCanvas.width = 240;
+            mpInputCanvas.height = 180;
+            const mpInputCtx = mpInputCanvas.getContext('2d', {{ willReadFrequently: true }});
+
+            // Estado JSON NUI actual
+            let latestNuiCommand = {{
+                comando: "NINGUNO",
+                parametros: {{
+                    eje: "NA",
+                    intensidad: 0.0
+                }}
+            }};
+            window.getLatestGestureCommandJSON = () => JSON.stringify(latestNuiCommand);
+
+            function emitNuiCommand(comando, eje, intensidad) {{
+                const clampedInt = comando === "NINGUNO" ? 0.0 : Number(Math.min(1.0, Math.max(0.0, intensidad)).toFixed(2));
+                latestNuiCommand = {{
+                    comando: comando,
+                    parametros: {{
+                        eje: comando === "NINGUNO" ? "NA" : eje,
+                        intensidad: clampedInt
+                    }}
+                }};
+                if (gestureJsonOutput) {{
+                    gestureJsonOutput.textContent = JSON.stringify(latestNuiCommand, null, 2);
+                }}
+                return latestNuiCommand;
+            }}
 
             // Conexiones de los 21 puntos anatómicos de la mano
             const HAND_CONNECTIONS = [
@@ -2450,7 +2487,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
             ];
 
-            // Rotación y Zoom orbital compatibles con Three.js r128 (OrbitControls no expone rotateLeft/dollyIn públicos)
+            // 1. ROTAR: Orbitar cámara alrededor de la pieza en ejes X (horizontal) o Y (vertical)
             function orbitCameraBy(deltaTheta, deltaPhi) {{
                 try {{
                     const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
@@ -2468,6 +2505,19 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
             }}
 
+            // 2. GIRAR: Roll sobre el propio eje frontal Z de la pieza
+            function rollPieceBy(deltaAngleZ) {{
+                try {{
+                    if (currentMesh) {{
+                        currentMesh.rotation.z += deltaAngleZ;
+                        if (dimGroup) dimGroup.rotation.z += deltaAngleZ;
+                    }}
+                }} catch (e) {{
+                    console.warn('Error en rollPieceBy:', e);
+                }}
+            }}
+
+            // 3 & 4. ZOOM_IN / ZOOM_OUT: Acercar o alejar cámara respecto a la pieza
             function dollyCameraBy(scaleFactor) {{
                 try {{
                     const offset = new THREE.Vector3().subVectors(camera.position, controls.target);
@@ -2483,15 +2533,17 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
             }}
 
-            // Dibuja el video en vivo a 60 FPS independientemente de la velocidad de MediaPipe WASM
-            function renderGestureVideoFrame() {{
+            // Dibuja únicamente el esqueleto transparente sobre el <video> nativo en vivo
+            function renderGestureOverlay() {{
                 if (!gestureActive || !gCanvasCtx || !gestureCanvas) return;
                 const cw = gestureCanvas.width;
                 const ch = gestureCanvas.height;
 
-                if (gestureVideo && gestureVideo.readyState >= 2 && gestureVideo.videoWidth > 0) {{
-                    gCanvasCtx.clearRect(0, 0, cw, ch);
-                    gCanvasCtx.drawImage(gestureVideo, 0, 0, cw, ch);
+                gCanvasCtx.clearRect(0, 0, cw, ch);
+
+                // Limpiar landmarks si pasaron más de 450ms sin detección
+                if (latestHandLandmarks && (performance.now() - lastLandmarkTime > 450)) {{
+                    latestHandLandmarks = null;
                 }}
 
                 if (latestHandLandmarks) {{
@@ -2522,6 +2574,20 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
             }}
 
+            // Geometría anatómica para saber qué dedos están extendidos
+            function isFingerExtended(lms, tipIdx, pipIdx) {{
+                const dTip = Math.hypot(lms[tipIdx].x - lms[0].x, lms[tipIdx].y - lms[0].y);
+                const dPip = Math.hypot(lms[pipIdx].x - lms[0].x, lms[pipIdx].y - lms[0].y);
+                return dTip > dPip * 1.06;
+            }}
+
+            function isThumbExtended(lms) {{
+                const dTipPinky = Math.hypot(lms[4].x - lms[17].x, lms[4].y - lms[17].y);
+                const dIpPinky = Math.hypot(lms[3].x - lms[17].x, lms[3].y - lms[17].y);
+                const dTipIndexMcp = Math.hypot(lms[4].x - lms[5].x, lms[4].y - lms[5].y);
+                return (dTipPinky > dIpPinky * 1.05) || (dTipIndexMcp > 0.065);
+            }}
+
             function onHandResults(results) {{
                 try {{
                     if (!gestureActive) return;
@@ -2529,60 +2595,140 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {{
                         const lms = results.multiHandLandmarks[0];
                         latestHandLandmarks = lms;
+                        lastLandmarkTime = performance.now();
 
-                        // Palma de la mano (Landmark 9)
+                        // Evaluar extensión de los 5 dedos
+                        const thumbExt = isThumbExtended(lms);
+                        const indexExt = isFingerExtended(lms, 8, 6);
+                        const middleExt = isFingerExtended(lms, 12, 10);
+                        const ringExt = isFingerExtended(lms, 16, 14);
+                        const pinkyExt = isFingerExtended(lms, 20, 18);
+
+                        const openFingersCount = (thumbExt ? 1 : 0) + (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0);
+                        const isOpenPalm = (openFingersCount >= 4) && middleExt && ringExt;
+                        const isThumbIndexOnly = thumbExt && indexExt && !middleExt && !ringExt && !pinkyExt;
+
+                        // Coordenadas de la palma (Landmark 9) espejadas
                         const palmX = 1 - lms[9].x;
                         const palmY = lms[9].y;
 
-                        // Detección de pellizco (Pulgar 4 a Índice 8)
-                        const dxPinch = lms[4].x - lms[8].x;
-                        const dyPinch = lms[4].y - lms[8].y;
-                        const pinchDist = Math.hypot(dxPinch, dyPinch);
-                        const isPinching = pinchDist < 0.085;
+                        // Distancia entre Pulgar (4) e Índice (8) y ángulo de la L / muñeca
+                        const pinchDist = Math.hypot(lms[4].x - lms[8].x, lms[4].y - lms[8].y);
+                        const rollAngle = Math.atan2(lms[8].y - lms[0].y, (1 - lms[8].x) - (1 - lms[0].x));
 
-                        if (isPinching) {{
-                            if (gestureStatusBadge) {{
-                                gestureStatusBadge.style.color = '#38bdf8';
-                                gestureStatusBadge.textContent = '🤏 Pellizco Activo: Zoom CAD';
-                            }}
-                            if (lastPinchDist !== null) {{
-                                const deltaPinch = pinchDist - lastPinchDist;
-                                if (Math.abs(deltaPinch) > 0.003) {{
-                                    if (deltaPinch > 0) {{
-                                        dollyCameraBy(0.96);
-                                    }} else {{
-                                        dollyCameraBy(1.04);
-                                    }}
-                                }}
-                            }}
-                            lastPinchDist = pinchDist;
-                            lastHandPos = null;
-                        }} else {{
-                            if (gestureStatusBadge) {{
-                                gestureStatusBadge.style.color = '#22c55e';
-                                gestureStatusBadge.textContent = '🖐️ Mano Detectada: Rotando';
-                            }}
+                        // ── REGLA 1: MANO ABIERTA (5 DEDOS EXTENDIDOS) -> ROTAR (Eje X o Y) ──
+                        if (isOpenPalm) {{
                             lastPinchDist = null;
+                            lastRollAngle = null;
 
                             if (lastHandPos !== null) {{
                                 const dx = palmX - lastHandPos.x;
                                 const dy = palmY - lastHandPos.y;
+                                const distMove = Math.hypot(dx, dy);
 
-                                if (Math.hypot(dx, dy) > 0.002) {{
-                                    const speed = 4.8;
+                                if (distMove > 0.003) {{
+                                    const ejePrincipal = Math.abs(dx) >= Math.abs(dy) ? "X" : "Y";
+                                    const intensidad = Math.min(1.0, Math.max(0.05, distMove / 0.055));
+                                    const speed = 5.0;
                                     orbitCameraBy(dx * speed, -dy * speed);
+                                    emitNuiCommand("ROTAR", ejePrincipal, intensidad);
+
+                                    if (gestureStatusBadge) {{
+                                        gestureStatusBadge.style.color = '#22c55e';
+                                        gestureStatusBadge.textContent = `🖐️ ROTAR (Eje ${{ejePrincipal}} | Int: ${{intensidad.toFixed(2)}})`;
+                                    }}
+                                }} else {{
+                                    emitNuiCommand("NINGUNO", "NA", 0.0);
+                                    if (gestureStatusBadge) {{
+                                        gestureStatusBadge.style.color = '#94a3b8';
+                                        gestureStatusBadge.textContent = '🖐️ Mano abierta (Estática)';
+                                    }}
                                 }}
+                            }} else {{
+                                emitNuiCommand("NINGUNO", "NA", 0.0);
                             }}
                             lastHandPos = {{ x: palmX, y: palmY }};
+                            return;
+                        }}
+
+                        // ── REGLAS 2, 3 y 4: ÍNDICE Y PULGAR (L / PINZA) -> GIRAR (Z), ZOOM_IN, ZOOM_OUT ──
+                        if (isThumbIndexOnly || (!middleExt && !ringExt && indexExt)) {{
+                            lastHandPos = null;
+
+                            let deltaPinch = 0;
+                            if (lastPinchDist !== null) {{
+                                deltaPinch = pinchDist - lastPinchDist;
+                            }}
+
+                            let deltaRoll = 0;
+                            if (lastRollAngle !== null) {{
+                                deltaRoll = rollAngle - lastRollAngle;
+                                while (deltaRoll > Math.PI) deltaRoll -= 2 * Math.PI;
+                                while (deltaRoll < -Math.PI) deltaRoll += 2 * Math.PI;
+                            }}
+
+                            lastPinchDist = pinchDist;
+                            lastRollAngle = rollAngle;
+
+                            // Distinguir entre giro de muñeca en L (GIRAR en Z) vs Pinza abriéndose/cerrándose (ZOOM_IN / ZOOM_OUT)
+                            const isRotatingWristL = (pinchDist > 0.085) && (Math.abs(deltaRoll) > 0.022) && (Math.abs(deltaRoll) * 0.45 > Math.abs(deltaPinch));
+
+                            if (isRotatingWristL) {{
+                                const intensidad = Math.min(1.0, Math.max(0.05, Math.abs(deltaRoll) / 0.22));
+                                rollPieceBy(deltaRoll * 1.6);
+                                emitNuiCommand("GIRAR", "Z", intensidad);
+                                if (gestureStatusBadge) {{
+                                    gestureStatusBadge.style.color = '#f59e0b';
+                                    gestureStatusBadge.textContent = `👆 GIRAR Eje Z (Int: ${{intensidad.toFixed(2)}})`;
+                                }}
+                            }} else if (Math.abs(deltaPinch) > 0.004) {{
+                                const intensidad = Math.min(1.0, Math.max(0.05, Math.abs(deltaPinch) / 0.045));
+                                if (deltaPinch > 0) {{
+                                    // Pinza abriéndose -> ZOOM_IN (Acercar)
+                                    dollyCameraBy(1 - 0.12 * intensidad);
+                                    emitNuiCommand("ZOOM_IN", "Z", intensidad);
+                                    if (gestureStatusBadge) {{
+                                        gestureStatusBadge.style.color = '#38bdf8';
+                                        gestureStatusBadge.textContent = `🤏 ZOOM_IN (Int: ${{intensidad.toFixed(2)}})`;
+                                    }}
+                                }} else {{
+                                    // Pinza cerrándose -> ZOOM_OUT (Alejar)
+                                    dollyCameraBy(1 + 0.12 * intensidad);
+                                    emitNuiCommand("ZOOM_OUT", "Z", intensidad);
+                                    if (gestureStatusBadge) {{
+                                        gestureStatusBadge.style.color = '#38bdf8';
+                                        gestureStatusBadge.textContent = `🤏 ZOOM_OUT (Int: ${{intensidad.toFixed(2)}})`;
+                                    }}
+                                }}
+                            }} else {{
+                                emitNuiCommand("NINGUNO", "NA", 0.0);
+                                if (gestureStatusBadge) {{
+                                    gestureStatusBadge.style.color = '#94a3b8';
+                                    gestureStatusBadge.textContent = '👆 Gesto L / Pinza listo';
+                                }}
+                            }}
+                            return;
+                        }}
+
+                        // ── REGLA 5: CUALQUIER OTRO GESTO O PUÑO CERRADO -> NINGUNO ──
+                        lastHandPos = null;
+                        lastPinchDist = null;
+                        lastRollAngle = null;
+                        emitNuiCommand("NINGUNO", "NA", 0.0);
+                        if (gestureStatusBadge) {{
+                            gestureStatusBadge.style.color = '#94a3b8';
+                            gestureStatusBadge.textContent = '✊ Gesto en pausa (NINGUNO)';
                         }}
                     }} else {{
                         latestHandLandmarks = null;
+                        lastHandPos = null;
+                        lastPinchDist = null;
+                        lastRollAngle = null;
+                        emitNuiCommand("NINGUNO", "NA", 0.0);
                         if (gestureStatusBadge) {{
                             gestureStatusBadge.style.color = '#94a3b8';
                             gestureStatusBadge.textContent = '👁️ Coloca tu mano frente a la cámara';
                         }}
-                        lastHandPos = null;
-                        lastPinchDist = null;
                     }}
                 }} catch (err) {{
                     console.warn('Error en onHandResults:', err);
@@ -2596,24 +2742,29 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
             function stepGestureDetection() {{
                 if (!gestureActive) return;
 
-                // 1. Pintar siempre el video en vivo (nunca se congela)
-                renderGestureVideoFrame();
+                // 1. Pintar el esqueleto transparente sobre el <video> en vivo
+                renderGestureOverlay();
 
-                // 2. Enviar fotograma a MediaPipe sin bloquear el bucle de video
+                // 2. Enviar fotograma a MediaPipe a través de un canvas 2D intermedio (evita bloqueos WebGL de <video> en Chrome)
                 const now = performance.now();
-                if (isSendingFrame && (now - lastSendTimestamp > 1500)) {{
+                if (isSendingFrame && (now - lastSendTimestamp > 1200)) {{
                     isSendingFrame = false; // Watchdog anti-bloqueo
                 }}
 
-                if (!isSendingFrame && gestureVideo && gestureVideo.readyState >= 2 && gestureVideo.videoWidth > 0 && !gestureVideo.paused && handsDetector) {{
+                if (!isSendingFrame && gestureVideo && gestureVideo.readyState >= 2 && gestureVideo.videoWidth > 0 && !gestureVideo.paused && handsDetector && mpInputCtx) {{
                     isSendingFrame = true;
                     lastSendTimestamp = now;
-                    handsDetector.send({{ image: gestureVideo }}).then(() => {{
+                    try {{
+                        mpInputCtx.drawImage(gestureVideo, 0, 0, mpInputCanvas.width, mpInputCanvas.height);
+                        handsDetector.send({{ image: mpInputCanvas }}).then(() => {{
+                            isSendingFrame = false;
+                        }}).catch((e) => {{
+                            isSendingFrame = false;
+                            console.warn('Frame detection error:', e);
+                        }});
+                    }} catch (e) {{
                         isSendingFrame = false;
-                    }}).catch((e) => {{
-                        isSendingFrame = false;
-                        console.warn('Frame detection error:', e);
-                    }});
+                    }}
                 }}
 
                 if (gestureActive) {{
@@ -2633,6 +2784,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     video: {{
                         width: {{ ideal: 320 }},
                         height: {{ ideal: 240 }},
+                        frameRate: {{ ideal: 30 }},
                         deviceId: deviceId ? {{ exact: deviceId }} : undefined
                     }},
                     audio: false
@@ -2723,24 +2875,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     }}
 
                     try {{
-                        if (typeof Hands === 'undefined') {{
-                            throw new Error('Librería MediaPipe Hands no cargada');
-                        }}
-
-                        if (!handsDetector) {{
-                            handsDetector = new Hands({{
-                                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${{file}}`
-                            }});
-                            handsDetector.setOptions({{
-                                maxNumHands: 1,
-                                modelComplexity: 0,
-                                minDetectionConfidence: 0.4,
-                                minTrackingConfidence: 0.4
-                            }});
-                            handsDetector.onResults(onHandResults);
-                        }}
-
-                        // Intentar detectar y priorizar la Integrated Camera física
+                        // 1. Iniciar primero la cámara física para que el video en vivo se vea al instante
                         try {{
                             const devs = await navigator.mediaDevices.enumerateDevices();
                             const vDevs = devs.filter(d => d.kind === 'videoinput');
@@ -2754,6 +2889,24 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         }} catch (e) {{}}
 
                         await startSelectedCamera(selectedCameraId);
+
+                        // 2. Inicializar detector MediaPipe Hands
+                        if (typeof Hands === 'undefined') {{
+                            throw new Error('Librería MediaPipe Hands no cargada');
+                        }}
+
+                        if (!handsDetector) {{
+                            handsDetector = new Hands({{
+                                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${{file}}`
+                            }});
+                            handsDetector.setOptions({{
+                                maxNumHands: 1,
+                                modelComplexity: 0,
+                                minDetectionConfidence: 0.45,
+                                minTrackingConfidence: 0.45
+                            }});
+                            handsDetector.onResults(onHandResults);
+                        }}
 
                         if (animFrameId) cancelAnimationFrame(animFrameId);
                         animFrameId = requestAnimationFrame(stepGestureDetection);
@@ -2775,6 +2928,10 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     if (gestureHudBox) gestureHudBox.style.display = 'none';
                     lastHandPos = null;
                     lastPinchDist = null;
+                    lastRollAngle = null;
+                    latestHandLandmarks = null;
+                    isSendingFrame = false;
+                    emitNuiCommand("NINGUNO", "NA", 0.0);
                     if (animFrameId) {{
                         cancelAnimationFrame(animFrameId);
                         animFrameId = null;
