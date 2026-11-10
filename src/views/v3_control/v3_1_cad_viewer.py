@@ -2574,18 +2574,21 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                 }}
             }}
 
-            // Geometría anatómica para saber qué dedos están extendidos
-            function isFingerExtended(lms, tipIdx, pipIdx) {{
-                const dTip = Math.hypot(lms[tipIdx].x - lms[0].x, lms[tipIdx].y - lms[0].y);
-                const dPip = Math.hypot(lms[pipIdx].x - lms[0].x, lms[pipIdx].y - lms[0].y);
-                return dTip > dPip * 1.06;
+            // Geometría anatómica robusta para saber qué dedos están extendidos vs doblados en puño
+            function isFingerExtended(lms, tipIdx, pipIdx, mcpIdx) {{
+                const dTipWrist = Math.hypot(lms[tipIdx].x - lms[0].x, lms[tipIdx].y - lms[0].y);
+                const dPipWrist = Math.hypot(lms[pipIdx].x - lms[0].x, lms[pipIdx].y - lms[0].y);
+                const dMcpWrist = Math.hypot(lms[mcpIdx].x - lms[0].x, lms[mcpIdx].y - lms[0].y);
+                const dTipMcp = Math.hypot(lms[tipIdx].x - lms[mcpIdx].x, lms[tipIdx].y - lms[mcpIdx].y);
+                // Para estar realmente extendido, la punta debe sobresalir claramente más allá del PIP y alejarse del nudillo MCP
+                return (dTipWrist > dPipWrist * 1.12) && (dTipWrist > dMcpWrist * 1.25) && (dTipMcp > dMcpWrist * 0.45);
             }}
 
             function isThumbExtended(lms) {{
-                const dTipPinky = Math.hypot(lms[4].x - lms[17].x, lms[4].y - lms[17].y);
-                const dIpPinky = Math.hypot(lms[3].x - lms[17].x, lms[3].y - lms[17].y);
+                const palmScale = Math.hypot(lms[9].x - lms[0].x, lms[9].y - lms[0].y) || 0.1;
                 const dTipIndexMcp = Math.hypot(lms[4].x - lms[5].x, lms[4].y - lms[5].y);
-                return (dTipPinky > dIpPinky * 1.05) || (dTipIndexMcp > 0.065);
+                const dTipMiddleMcp = Math.hypot(lms[4].x - lms[9].x, lms[4].y - lms[9].y);
+                return (dTipIndexMcp > palmScale * 0.65) && (dTipMiddleMcp > palmScale * 0.65);
             }}
 
             function onHandResults(results) {{
@@ -2597,42 +2600,55 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         latestHandLandmarks = lms;
                         lastLandmarkTime = performance.now();
 
-                        // Evaluar extensión de los 5 dedos
+                        // Evaluar extensión de los 5 dedos con respecto a la escala de la palma
                         const thumbExt = isThumbExtended(lms);
-                        const indexExt = isFingerExtended(lms, 8, 6);
-                        const middleExt = isFingerExtended(lms, 12, 10);
-                        const ringExt = isFingerExtended(lms, 16, 14);
-                        const pinkyExt = isFingerExtended(lms, 20, 18);
+                        const indexExt = isFingerExtended(lms, 8, 6, 5);
+                        const middleExt = isFingerExtended(lms, 12, 10, 9);
+                        const ringExt = isFingerExtended(lms, 16, 14, 13);
+                        const pinkyExt = isFingerExtended(lms, 20, 18, 17);
 
-                        const openFingersCount = (thumbExt ? 1 : 0) + (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0);
-                        const isOpenPalm = (openFingersCount >= 4) && middleExt && ringExt;
-                        const isClosedFist = (!indexExt && !middleExt && !ringExt && !pinkyExt);
-                        const isThumbIndexOnly = thumbExt && indexExt && !middleExt && !ringExt && !pinkyExt;
+                        const fourFingersExtCount = (indexExt ? 1 : 0) + (middleExt ? 1 : 0) + (ringExt ? 1 : 0) + (pinkyExt ? 1 : 0);
 
-                        // Coordenadas de la palma (Landmark 9) espejadas
-                        const palmX = 1 - lms[9].x;
-                        const palmY = lms[9].y;
+                        // Coordenadas de la palma (promedio estable entre muñeca 0 y nudillos 5, 9, 17) espejadas
+                        const palmX = 1 - ((lms[0].x + lms[5].x + lms[9].x + lms[17].x) * 0.25);
+                        const palmY = (lms[0].y + lms[5].y + lms[9].y + lms[17].y) * 0.25;
 
-                        // Distancia entre Pulgar (4) e Índice (8) y ángulo de la L / muñeca
+                        // Distancia entre Pulgar (4) e Índice (8) y ángulo de rotación de la muñeca (roll)
                         const pinchDist = Math.hypot(lms[4].x - lms[8].x, lms[4].y - lms[8].y);
-                        const rollAngle = Math.atan2(lms[8].y - lms[0].y, (1 - lms[8].x) - (1 - lms[0].x));
+                        const wristRollAngle = Math.atan2(lms[9].y - lms[0].y, (1 - lms[9].x) - (1 - lms[0].x));
+                        const lShapeRollAngle = Math.atan2(lms[8].y - lms[0].y, (1 - lms[8].x) - (1 - lms[0].x));
 
-                        // ── REGLA 1: PUÑO CERRADO (✊) O MANO ABIERTA (🖐️) -> ROTAR (Orbitar Eje X o Y) ──
-                        if (isClosedFist || isOpenPalm) {{
+                        // Un gesto es L / Pinza ÚNICAMENTE si el índice está claramente extendido y los otros 3 dedos (medio, anular, meñique) están cerrados
+                        const isIndexPinchOrL = indexExt && !middleExt && !ringExt && !pinkyExt;
+                        // Es Puño Cerrado si al menos 3 de los 4 dedos largos están doblados (y no es gesto L claro)
+                        const isClosedFist = !isIndexPinchOrL && (fourFingersExtCount <= 1);
+                        // Es Mano Abierta si 3 o más dedos están extendidos
+                        const isOpenPalm = (fourFingersExtCount >= 3);
+
+                        // ── REGLA 1: PUÑO CERRADO (✊) O MANO ABIERTA (🖐️) -> ROTAR / GIRAR LA PIEZA ──
+                        if (isClosedFist || isOpenPalm || !isIndexPinchOrL) {{
                             lastPinchDist = null;
-                            lastRollAngle = null;
                             const gestureIcon = isClosedFist ? '✊' : '🖐️';
                             const gestureLabel = isClosedFist ? 'Puño cerrado' : 'Mano abierta';
 
+                            let moved = false;
                             if (lastHandPos !== null) {{
                                 const dx = palmX - lastHandPos.x;
                                 const dy = palmY - lastHandPos.y;
                                 const distMove = Math.hypot(dx, dy);
 
-                                if (distMove > 0.0025) {{
+                                let deltaWristRoll = 0;
+                                if (lastRollAngle !== null) {{
+                                    deltaWristRoll = wristRollAngle - lastRollAngle;
+                                    while (deltaWristRoll > Math.PI) deltaWristRoll -= 2 * Math.PI;
+                                    while (deltaWristRoll < -Math.PI) deltaWristRoll += 2 * Math.PI;
+                                }}
+
+                                // Si traslada el puño/mano en X o Y -> Orbitar (ROTAR X / Y)
+                                if (distMove > 0.0018) {{
                                     const ejePrincipal = Math.abs(dx) >= Math.abs(dy) ? "X" : "Y";
-                                    const intensidad = Math.min(1.0, Math.max(0.05, distMove / 0.05));
-                                    const speed = 5.5;
+                                    const intensidad = Math.min(1.0, Math.max(0.08, distMove / 0.045));
+                                    const speed = 6.5;
                                     orbitCameraBy(dx * speed, -dy * speed);
                                     emitNuiCommand("ROTAR", ejePrincipal, intensidad);
 
@@ -2640,22 +2656,37 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                                         gestureStatusBadge.style.color = '#22c55e';
                                         gestureStatusBadge.textContent = `${{gestureIcon}} ROTAR (Eje ${{ejePrincipal}} | Int: ${{intensidad.toFixed(2)}})`;
                                     }}
-                                }} else {{
+                                    moved = true;
+                                }} else if (isClosedFist && Math.abs(deltaWristRoll) > 0.018) {{
+                                    // Si mantiene el puño en su lugar pero gira la muñeca -> GIRAR en Z
+                                    const intensidad = Math.min(1.0, Math.max(0.08, Math.abs(deltaWristRoll) / 0.18));
+                                    rollPieceBy(deltaWristRoll * 1.8);
+                                    emitNuiCommand("GIRAR", "Z", intensidad);
+
+                                    if (gestureStatusBadge) {{
+                                        gestureStatusBadge.style.color = '#f59e0b';
+                                        gestureStatusBadge.textContent = `✊ GIRAR Puño Eje Z (Int: ${{intensidad.toFixed(2)}})`;
+                                    }}
+                                    moved = true;
+                                }}
+
+                                if (!moved) {{
                                     emitNuiCommand("NINGUNO", "NA", 0.0);
                                     if (gestureStatusBadge) {{
-                                        gestureStatusBadge.style.color = '#94a3b8';
-                                        gestureStatusBadge.textContent = `${{gestureIcon}} ${{gestureLabel}} (Mueve para rotar)`;
+                                        gestureStatusBadge.style.color = '#4ade80';
+                                        gestureStatusBadge.textContent = `${{gestureIcon}} ${{gestureLabel}} detectado (Mueve para rotar)`;
                                     }}
                                 }}
                             }} else {{
                                 emitNuiCommand("NINGUNO", "NA", 0.0);
                             }}
                             lastHandPos = {{ x: palmX, y: palmY }};
+                            lastRollAngle = wristRollAngle;
                             return;
                         }}
 
                         // ── REGLAS 2, 3 y 4: ÍNDICE Y PULGAR (L / PINZA) -> GIRAR (Z), ZOOM_IN, ZOOM_OUT ──
-                        if (isThumbIndexOnly || (!middleExt && !ringExt && indexExt)) {{
+                        if (isIndexPinchOrL) {{
                             lastHandPos = null;
 
                             let deltaPinch = 0;
@@ -2665,13 +2696,13 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
 
                             let deltaRoll = 0;
                             if (lastRollAngle !== null) {{
-                                deltaRoll = rollAngle - lastRollAngle;
+                                deltaRoll = lShapeRollAngle - lastRollAngle;
                                 while (deltaRoll > Math.PI) deltaRoll -= 2 * Math.PI;
                                 while (deltaRoll < -Math.PI) deltaRoll += 2 * Math.PI;
                             }}
 
                             lastPinchDist = pinchDist;
-                            lastRollAngle = rollAngle;
+                            lastRollAngle = lShapeRollAngle;
 
                             // Distinguir entre giro de muñeca en L (GIRAR en Z) vs Pinza abriéndose/cerrándose (ZOOM_IN / ZOOM_OUT)
                             const isRotatingWristL = (pinchDist > 0.085) && (Math.abs(deltaRoll) > 0.022) && (Math.abs(deltaRoll) * 0.45 > Math.abs(deltaPinch));
