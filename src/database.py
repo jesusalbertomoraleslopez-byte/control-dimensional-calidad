@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import hashlib
+import threading
 from datetime import datetime
 
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -15,7 +16,11 @@ def _sync_db_from_gcs():
     la descarga desde el Bucket de GCS para restaurar el estado persistente
     (auditorías, mediciones, etc.) que sobrevive a los redeployments de Streamlit Cloud.
     """
+    global _GCS_RESTORE_OK
+    if _GCS_RESTORE_OK:
+        return
     if os.path.exists(DB_PATH) and os.path.getsize(DB_PATH) > 8192:
+        _GCS_RESTORE_OK = True
         return  # DB local ya tiene datos, no necesitamos descargar
     try:
         from src.services.gcs_storage import get_bucket
@@ -26,8 +31,9 @@ def _sync_db_from_gcs():
         if blob.exists():
             os.makedirs(DB_DIR, exist_ok=True)
             blob.download_to_filename(DB_PATH)
-    except Exception:
-        pass  # Silencioso: si falla, continuamos con DB local/nueva
+        _GCS_RESTORE_OK = True  # restauró bien, o confirmó que no hay snapshot previo
+    except Exception as e:
+        print(f"[DB-PERSIST] No se pudo restaurar DB desde GCS: {e}")  # NO se habilita subida para no pisar el snapshot
 
 def save_database_to_gcs():
     """
@@ -47,9 +53,68 @@ def save_database_to_gcs():
     except Exception:
         pass  # Silencioso: la app continúa aunque no pueda guardar en GCS
 
+_GCS_RESTORE_OK = False          # True solo si la DB se restauró (o no existía snapshot) sin error
+_upload_lock = threading.Lock()
+_upload_timer = None
+_UPLOAD_DEBOUNCE_SECONDS = 3.0
+
+
+def _persist_enabled() -> bool:
+    """Solo persiste en GCS en Cloud Run (o si se fuerza), para que un entorno local nunca pise producción."""
+    return bool(os.environ.get("K_SERVICE")) or os.environ.get("SIGRAMA_DB_GCS_PERSIST") == "1"
+
+
+def _do_upload_snapshot():
+    """Sube una copia consistente (API backup de SQLite) de la DB al bucket."""
+    if not _persist_enabled() or not _GCS_RESTORE_OK or not os.path.exists(DB_PATH):
+        return
+    tmp_path = DB_PATH + ".snapshot"
+    try:
+        src = sqlite3.connect(DB_PATH, timeout=60.0)
+        dst = sqlite3.connect(tmp_path)
+        with dst:
+            src.backup(dst)
+        dst.close()
+        src.close()
+        from src.services.gcs_storage import get_bucket
+        bucket = get_bucket()
+        if bucket is None:
+            return
+        bucket.blob(GCS_DB_BLOB).upload_from_filename(tmp_path, content_type="application/octet-stream")
+    except Exception as e:
+        print(f"[DB-PERSIST] Error subiendo snapshot a GCS: {e}")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+
+
+def schedule_db_upload():
+    """Programa (con debounce) la subida de la DB a GCS tras un commit."""
+    global _upload_timer
+    if not _persist_enabled():
+        return
+    with _upload_lock:
+        if _upload_timer is not None:
+            _upload_timer.cancel()
+        _upload_timer = threading.Timer(_UPLOAD_DEBOUNCE_SECONDS, _do_upload_snapshot)
+        _upload_timer.daemon = False  # que no se pierda al cerrar la instancia
+        _upload_timer.start()
+
+
+class _PersistentConnection(sqlite3.Connection):
+    """Conexión que persiste la DB en GCS después de cada commit con cambios."""
+    def commit(self):
+        had_changes = self.in_transaction
+        super().commit()
+        if had_changes:
+            schedule_db_upload()
+
+
 def get_connection():
     os.makedirs(DB_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=60.0)
+    conn = sqlite3.connect(DB_PATH, timeout=60.0, factory=_PersistentConnection)
     try:
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA busy_timeout = 60000;")
