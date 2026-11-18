@@ -2,6 +2,7 @@ import os
 import sqlite3
 import hashlib
 import threading
+import time
 from datetime import datetime
 
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
@@ -31,9 +32,59 @@ def _sync_db_from_gcs():
         if blob.exists():
             os.makedirs(DB_DIR, exist_ok=True)
             blob.download_to_filename(DB_PATH)
+            _remember_generation(blob)
         _GCS_RESTORE_OK = True  # restauró bien, o confirmó que no hay snapshot previo
     except Exception as e:
         print(f"[DB-PERSIST] No se pudo restaurar DB desde GCS: {e}")  # NO se habilita subida para no pisar el snapshot
+
+_remote_generation = None   # generación del blob en GCS que coincide con nuestra copia local
+_last_remote_check = 0.0
+
+
+def _remember_generation(blob):
+    global _remote_generation
+    try:
+        _remote_generation = int(blob.generation) if blob.generation else None
+    except Exception:
+        _remote_generation = None
+
+
+def _adopt_remote_db(blob):
+    """Otro proceso (p.ej. el sincronizador de escritorio) actualizó la DB en GCS: la adoptamos."""
+    tmp_path = DB_PATH + ".remote"
+    blob.download_to_filename(tmp_path)
+    for ext in ("-wal", "-shm"):
+        try:
+            os.remove(DB_PATH + ext)
+        except Exception:
+            pass
+    os.replace(tmp_path, DB_PATH)
+    _remember_generation(blob)
+    print("[DB-PERSIST] DB actualizada externamente en GCS: se adoptó la versión remota.")
+
+
+def _check_remote_changes():
+    """Cada ~20s verifica si la DB en GCS cambió por fuera y, de ser así y sin cambios locales pendientes, la adopta."""
+    global _last_remote_check
+    if not _persist_enabled() or not _GCS_RESTORE_OK:
+        return
+    now = time.time()
+    if now - _last_remote_check < 20:
+        return
+    _last_remote_check = now
+    with _upload_lock:
+        if _upload_timer is not None and _upload_timer.is_alive():
+            return  # hay cambios locales por subir
+    try:
+        from src.services.gcs_storage import get_bucket
+        bucket = get_bucket()
+        if bucket is None:
+            return
+        blob = bucket.get_blob(GCS_DB_BLOB)
+        if blob is not None and _remote_generation is not None and int(blob.generation) != _remote_generation:
+            _adopt_remote_db(blob)
+    except Exception as e:
+        print(f"[DB-PERSIST] Error verificando cambios remotos: {e}")
 
 def save_database_to_gcs():
     """
@@ -80,7 +131,22 @@ def _do_upload_snapshot():
         bucket = get_bucket()
         if bucket is None:
             return
-        bucket.blob(GCS_DB_BLOB).upload_from_filename(tmp_path, content_type="application/octet-stream")
+        blob = bucket.blob(GCS_DB_BLOB)
+        try:
+            if _remote_generation is not None:
+                blob.upload_from_filename(tmp_path, content_type="application/octet-stream",
+                                          if_generation_match=_remote_generation)
+            else:
+                blob.upload_from_filename(tmp_path, content_type="application/octet-stream")
+            _remember_generation(blob)
+        except Exception as up_err:
+            if "412" in str(up_err) or "Precondition" in str(up_err):
+                # Alguien más modificó la DB en GCS: no la pisamos, adoptamos la versión remota
+                remote = bucket.get_blob(GCS_DB_BLOB)
+                if remote is not None:
+                    _adopt_remote_db(remote)
+            else:
+                raise
     except Exception as e:
         print(f"[DB-PERSIST] Error subiendo snapshot a GCS: {e}")
     finally:
@@ -113,6 +179,7 @@ class _PersistentConnection(sqlite3.Connection):
 
 
 def get_connection():
+    _check_remote_changes()
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=60.0, factory=_PersistentConnection)
     try:

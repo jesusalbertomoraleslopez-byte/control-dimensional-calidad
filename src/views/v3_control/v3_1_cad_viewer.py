@@ -245,6 +245,31 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                     if p.get("numero_pieza", "").strip().lower() == t_pz or p.get("numero_plano", "").strip().lower() == t_pz:
                         selected_piece = p
                         break
+            if not selected_piece and (t_sku or t_pz):
+                import re as _re
+                _target_norm = _re.sub(r'[^a-z0-9]', '', (t_sku or t_pz))
+                if _target_norm:
+                    for p in registered_pieces:
+                        _p_norm = _re.sub(r'[^a-z0-9]', '', str(p.get("numero_pieza", "")).lower())
+                        _sku_norm = _re.sub(r'[^a-z0-9]', '', str(p.get("nombre_sku", "")).lower())
+                        if _target_norm == _p_norm or _target_norm in _sku_norm or (_p_norm and _p_norm in _target_norm):
+                            selected_piece = p
+                            break
+            if not selected_piece and (t_sku or t_pz):
+                import html as _html
+                _raw = _html.escape((target_sku or st.query_params.get("sku", "") or target_pieza or st.query_params.get("pieza", "")).strip())
+                st.markdown(f"""
+                <div style="position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; background:#F8FAFC; font-family:Montserrat,Arial,sans-serif;">
+                  <div style="text-align:center; max-width:460px; padding:36px 32px; background:#FFFFFF; border:2px solid #EC2024; border-radius:14px; box-shadow:0 8px 28px rgba(0,0,0,0.12);">
+                    <div style="font-size:3.4rem; line-height:1;">&#9888;&#65039;</div>
+                    <div style="margin-top:12px; font-size:1.5rem; font-weight:900; color:#EC2024; letter-spacing:0.5px;">PIEZA SIN INGENIER&Iacute;A</div>
+                    <div style="margin-top:10px; display:inline-block; background:#111111; color:#FACC15; font-weight:800; font-size:1.05rem; padding:6px 14px; border-radius:6px;">{_raw}</div>
+                    <div style="margin-top:14px; font-size:0.92rem; color:#475569; line-height:1.5;">Esta pieza a&uacute;n no est&aacute; registrada en la base de datos de Prototipos, por lo que no tiene modelo 3D ni plano de control.</div>
+                    <div style="margin-top:18px; font-size:0.8rem; color:#94A3B8;">Puede cerrar esta ventana.</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.stop()
             if not selected_piece and registered_pieces:
                 selected_piece = registered_pieces[0]
             
@@ -603,7 +628,7 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
         short_cad = (step_filename[:22] + '...') if len(step_filename) > 25 else (step_filename or "Modelo_3D.STEP")
         btn_dl_cad_html = f'<a href="#" id="hud-btn-dl-cad" data-filename="{step_filename or "Modelo_3D.STEP"}" class="hud-action-btn cad-btn" title="Descargar Modelo 3D STEP">📦 Modelo CAD ({short_cad})</a>'
     else:
-        btn_dl_cad_html = '<span class="hud-action-btn disabled" title="Geometría generada paramétricamente">💡 Malla Paramétrica</span>'
+        btn_dl_cad_html = '<span class="hud-action-btn disabled" title="Esta pieza no tiene modelo 3D (.STEP) registrado en Ingeniería">⚠️ Sin Modelo 3D</span>'
 
     # Cargar fondo corporativo Sigrama para el visor 3D
     bg_data_uri = ""
@@ -2026,11 +2051,26 @@ def show_cad_viewer(direct_fullscreen=False, target_sku=None, target_pieza=None,
                         }} else {{
                             document.getElementById('info-overlay').innerHTML += "<div style='color:#ef4444;font-weight:bold;margin-top:5px;'>Error de carga: " + err.message + "</div>";
                         }}
-                        drawMockPiece();
+                        const overlay = document.getElementById('loading-overlay');
+                        if (overlay) overlay.remove();
                     }});
             }} else {{
-                // Render Mock Sheet Metal Piece with dynamic parameters
-                drawMockPiece();
+                // Sin archivo 3D STEP/STL físico: mostrar aviso claro en lugar de canaleta falsa
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) overlay.remove();
+                
+                const canvasWrap = document.getElementById('cad-canvas-container') || document.body;
+                const no3dBox = document.createElement('div');
+                no3dBox.id = 'no-3d-notice-box';
+                no3dBox.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; background:rgba(15,23,42,0.94); border:2px solid #38bdf8; border-radius:14px; padding:32px 36px; color:#ffffff; max-width:480px; box-shadow:0 12px 35px rgba(0,0,0,0.55); z-index:100; font-family:Montserrat,sans-serif; backdrop-filter:blur(6px);';
+                no3dBox.innerHTML = `
+                    <div style="font-size:3.2rem; line-height:1;">📐</div>
+                    <div style="margin-top:12px; font-size:1.35rem; font-weight:900; color:#38bdf8; letter-spacing:0.5px;">PLANO DE CONTROL DISPONIBLE</div>
+                    <div style="margin-top:6px; font-size:1rem; font-weight:800; color:#facc15;">${{piezaId}}</div>
+                    <div style="margin-top:14px; font-size:0.9rem; color:#cbd5e1; line-height:1.5;">Esta pieza cuenta con Ficha Dimensional y Plano de Control en PDF, pero <strong>no tiene modelo 3D (.STEP)</strong> registrado en el sistema.</div>
+                    <div style="margin-top:16px; font-size:0.82rem; color:#94a3b8;">Consulte el Plano de Control oficial y las cotas en el panel izquierdo.</div>
+                `;
+                canvasWrap.appendChild(no3dBox);
             }}
             
             function drawMockPiece() {{

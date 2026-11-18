@@ -276,6 +276,27 @@ class SigramaSyncApp:
             from scripts.subir_db_a_gcs import DB_PATH, GCS_DB_BLOB
             from src.services.gcs_storage import get_bucket, DEFAULT_BUCKET_NAME
 
+            # 0. Descargar la BD MÁS RECIENTE de la nube (con las auditorías hechas en la app) antes de registrar piezas nuevas.
+            #    Nunca se debe subir una BD local vieja: pisaría las auditorías de la nube.
+            bucket = get_bucket()
+            cloud_generation = None
+            if bucket is not None:
+                db_blob = bucket.get_blob(GCS_DB_BLOB)
+                if db_blob is not None:
+                    self._log("☁️ Descargando base de datos vigente de la nube (conserva auditorías)...")
+                    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+                    for ext in ("-wal", "-shm"):
+                        try:
+                            os.remove(DB_PATH + ext)
+                        except Exception:
+                            pass
+                    db_blob.download_to_filename(DB_PATH)
+                    cloud_generation = db_blob.generation
+                else:
+                    self._log("⚠️ No hay base de datos en la nube; se usará la local.")
+            else:
+                raise Exception("No se pudo conectar al bucket; se cancela para no dañar la base de datos de la nube.")
+
             # 1. Inyectar carpetas de forma incremental
             res = inyectar_carpetas_red(logger=self._log, progress_cb=self._update_progress)
 
@@ -286,16 +307,26 @@ class SigramaSyncApp:
             uploaded = res.get("uploaded", 0) if isinstance(res, dict) else 0
             total_scanned = res.get("total_scanned", 0) if isinstance(res, dict) else 0
 
-            # 2. Persistir base de datos
+            # 2. Persistir base de datos (solo si la nube no cambió mientras sincronizábamos)
             self.progress_bar["value"] = 90
             self.lbl_progress_status.config(text="Persistiendo base de datos actualizada en Google Cloud...", fg="#34D399")
             self._log("☁️ Sincronizando respaldo de base de datos en Google Cloud Storage...")
 
-            bucket = get_bucket()
             if bucket and os.path.exists(DB_PATH):
                 blob = bucket.blob(GCS_DB_BLOB)
-                blob.upload_from_filename(DB_PATH, content_type="application/octet-stream")
-                self._log(f"✅ Base de datos persistida: gs://{DEFAULT_BUCKET_NAME}/{GCS_DB_BLOB}")
+                try:
+                    if cloud_generation:
+                        blob.upload_from_filename(DB_PATH, content_type="application/octet-stream",
+                                                  if_generation_match=int(cloud_generation))
+                    else:
+                        blob.upload_from_filename(DB_PATH, content_type="application/octet-stream")
+                    self._log(f"✅ Base de datos persistida: gs://{DEFAULT_BUCKET_NAME}/{GCS_DB_BLOB}")
+                except Exception as up_err:
+                    if "412" in str(up_err) or "Precondition" in str(up_err):
+                        self._log("⚠️ La app en la nube modificó la base de datos durante la sincronización. "
+                                  "NO se sobrescribió (para proteger las auditorías). Vuelve a ejecutar la sincronización.")
+                    else:
+                        raise
 
             self.progress_bar["value"] = 100
             self.lbl_progress_status.config(text="¡Sincronización completada con éxito!", fg="#34D399")
