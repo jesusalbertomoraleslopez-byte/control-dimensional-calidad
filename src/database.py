@@ -28,8 +28,8 @@ def _sync_db_from_gcs():
         bucket = get_bucket()
         if bucket is None:
             return
-        blob = bucket.blob(GCS_DB_BLOB)
-        if blob.exists():
+        blob = bucket.get_blob(GCS_DB_BLOB)
+        if blob is not None:
             os.makedirs(DB_DIR, exist_ok=True)
             blob.download_to_filename(DB_PATH)
             _remember_generation(blob)
@@ -72,9 +72,6 @@ def _check_remote_changes():
     if now - _last_remote_check < 20:
         return
     _last_remote_check = now
-    with _upload_lock:
-        if _upload_timer is not None and _upload_timer.is_alive():
-            return  # hay cambios locales por subir
     try:
         from src.services.gcs_storage import get_bucket
         bucket = get_bucket()
@@ -88,26 +85,14 @@ def _check_remote_changes():
 
 def save_database_to_gcs():
     """
-    Persiste la base de datos local hacia el Bucket de GCS.
-    Llamar después de cada operación de escritura importante
-    (auditar pieza, guardar lote, etc.) para garantizar durabilidad.
+    Persiste de forma síncrona y consistente (incluyendo WAL) la base de datos local hacia GCS.
     """
-    if not os.path.exists(DB_PATH):
-        return
-    try:
-        from src.services.gcs_storage import get_bucket
-        bucket = get_bucket()
-        if bucket is None:
-            return
-        blob = bucket.blob(GCS_DB_BLOB)
-        blob.upload_from_filename(DB_PATH, content_type="application/octet-stream")
-    except Exception:
-        pass  # Silencioso: la app continúa aunque no pueda guardar en GCS
+    _do_upload_snapshot()
+
 
 _GCS_RESTORE_OK = False          # True solo si la DB se restauró (o no existía snapshot) sin error
+_initializing_db = False         # Evita subir durante DDL/seed inicial
 _upload_lock = threading.Lock()
-_upload_timer = None
-_UPLOAD_DEBOUNCE_SECONDS = 3.0
 
 
 def _persist_enabled() -> bool:
@@ -116,57 +101,51 @@ def _persist_enabled() -> bool:
 
 
 def _do_upload_snapshot():
-    """Sube una copia consistente (API backup de SQLite) de la DB al bucket."""
-    if not _persist_enabled() or not _GCS_RESTORE_OK or not os.path.exists(DB_PATH):
+    """Sube de forma síncrona una copia consistente (API backup de SQLite, incluye WAL) de la DB al bucket."""
+    if not _persist_enabled() or not _GCS_RESTORE_OK or _initializing_db or not os.path.exists(DB_PATH):
         return
-    tmp_path = DB_PATH + ".snapshot"
-    try:
-        src = sqlite3.connect(DB_PATH, timeout=60.0)
-        dst = sqlite3.connect(tmp_path)
-        with dst:
-            src.backup(dst)
-        dst.close()
-        src.close()
-        from src.services.gcs_storage import get_bucket
-        bucket = get_bucket()
-        if bucket is None:
-            return
-        blob = bucket.blob(GCS_DB_BLOB)
+    with _upload_lock:
+        tmp_path = DB_PATH + ".snapshot"
         try:
-            if _remote_generation is not None:
-                blob.upload_from_filename(tmp_path, content_type="application/octet-stream",
-                                          if_generation_match=_remote_generation)
-            else:
-                blob.upload_from_filename(tmp_path, content_type="application/octet-stream")
-            _remember_generation(blob)
-        except Exception as up_err:
-            if "412" in str(up_err) or "Precondition" in str(up_err):
-                # Alguien más modificó la DB en GCS: no la pisamos, adoptamos la versión remota
-                remote = bucket.get_blob(GCS_DB_BLOB)
-                if remote is not None:
-                    _adopt_remote_db(remote)
-            else:
-                raise
-    except Exception as e:
-        print(f"[DB-PERSIST] Error subiendo snapshot a GCS: {e}")
-    finally:
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
+            src = sqlite3.connect(DB_PATH, timeout=60.0)
+            dst = sqlite3.connect(tmp_path)
+            with dst:
+                src.backup(dst)
+            dst.close()
+            src.close()
+            from src.services.gcs_storage import get_bucket
+            bucket = get_bucket()
+            if bucket is None:
+                return
+            blob = bucket.blob(GCS_DB_BLOB)
+            try:
+                if _remote_generation is not None:
+                    blob.upload_from_filename(tmp_path, content_type="application/octet-stream",
+                                              if_generation_match=_remote_generation)
+                else:
+                    blob.upload_from_filename(tmp_path, content_type="application/octet-stream")
+                _remember_generation(blob)
+                print(f"[DB-PERSIST] Snapshot consistente subido a GCS (gen={_remote_generation}).")
+            except Exception as up_err:
+                if "412" in str(up_err) or "Precondition" in str(up_err):
+                    # Alguien más modificó la DB en GCS: no la pisamos, adoptamos la versión remota
+                    remote = bucket.get_blob(GCS_DB_BLOB)
+                    if remote is not None:
+                        _adopt_remote_db(remote)
+                else:
+                    raise
+        except Exception as e:
+            print(f"[DB-PERSIST] Error subiendo snapshot a GCS: {e}")
+        finally:
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 
 def schedule_db_upload():
-    """Programa (con debounce) la subida de la DB a GCS tras un commit."""
-    global _upload_timer
-    if not _persist_enabled():
-        return
-    with _upload_lock:
-        if _upload_timer is not None:
-            _upload_timer.cancel()
-        _upload_timer = threading.Timer(_UPLOAD_DEBOUNCE_SECONDS, _do_upload_snapshot)
-        _upload_timer.daemon = False  # que no se pierda al cerrar la instancia
-        _upload_timer.start()
+    """Persiste la DB en GCS dentro de la petición HTTP activa (evita cpu-throttling en Cloud Run)."""
+    _do_upload_snapshot()
 
 
 class _PersistentConnection(sqlite3.Connection):
@@ -174,8 +153,8 @@ class _PersistentConnection(sqlite3.Connection):
     def commit(self):
         had_changes = self.in_transaction
         super().commit()
-        if had_changes:
-            schedule_db_upload()
+        if had_changes and not _initializing_db:
+            _do_upload_snapshot()
 
 
 def get_connection():
@@ -194,9 +173,17 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 def initialize_database():
+    global _initializing_db
     # PASO 0: Intentar restaurar la DB persistida en GCS antes de inicializar esquema/datos
     _sync_db_from_gcs()
+    _initializing_db = True
+    try:
+        _initialize_database_schema_and_seed()
+    finally:
+        _initializing_db = False
 
+
+def _initialize_database_schema_and_seed():
     conn = get_connection()
     cursor = conn.cursor()
     
